@@ -1,0 +1,37 @@
+{
+  "extends": "../../config/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "downlevelIteration": true,
+    "target": "ES2020",
+    "composite": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "references": [
+    {
+      "path": "../../swiss-lib/packages/core"
+    },
+    {
+      "path": "../../swiss-lib/packages/compiler"
+    },
+    {
+      "path": "../../swiss-lib/packages/plugins/file-router"
+    }
+  ]
+}
