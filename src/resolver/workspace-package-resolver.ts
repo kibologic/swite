@@ -145,6 +145,14 @@ export async function resolveWorkspacePackage(
       if (swissLib && !additionalRoots.includes(swissLib) && swissLib !== primaryRoot) {
         additionalRoots.unshift(swissLib); // Prioritize swiss-lib
       }
+      // Also add swiss-lib/packages to ensure packages are found
+      if (swissLib) {
+        const swissLibPackages = path.join(swissLib, "packages");
+        if (await context.fileExists(swissLibPackages) && !additionalRoots.includes(swissLibPackages)) {
+          console.log(`[SWITE] Adding swiss-lib/packages to scan roots: ${swissLibPackages}`);
+          additionalRoots.unshift(swissLibPackages);
+        }
+      }
     } catch (error: any) {
       console.warn(`[SWITE] Error finding swiss-lib monorepo:`, error.message);
     }
@@ -158,7 +166,26 @@ export async function resolveWorkspacePackage(
     } catch (error: any) {
       console.error(`[SWITE] Error scanning package registry:`, error.message);
       console.error(`[SWITE] Stack:`, error.stack);
-      // Continue anyway - might find package on rescan
+    }
+  } else if (registry.getPackageCount() && pkgName.startsWith("@swissjs/")) {
+    // Registry already scanned but may not have swiss-lib/packages
+    // Check if @swissjs/core is missing from registry
+    const existingPkg = registry.findPackage(pkgName);
+    if (!existingPkg) {
+      console.log(`[SWITE] ${pkgName} not in registry, forcing rescan with swiss-lib/packages...`);
+      await registry.rescan();
+      // After rescan, if still not found, explicitly scan swiss-lib/packages
+      const stillMissing = !registry.findPackage(pkgName);
+      if (stillMissing) {
+        const swissLib = await findSwissLibMonorepo(context.root);
+        if (swissLib) {
+          const swissLibPackages = path.join(swissLib, "packages");
+          if (await context.fileExists(swissLibPackages)) {
+            console.log(`[SWITE] Explicitly scanning swiss-lib/packages: ${swissLibPackages}`);
+            await registry.scanWorkspace(swissLibPackages, []);
+          }
+        }
+      }
     }
   } else if (!primaryRoot) {
     console.warn(`[SWITE] No workspace root found, cannot scan packages`);

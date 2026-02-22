@@ -18,11 +18,12 @@ export interface HandlerContext {
 /**
  * Set cache-busting headers for development
  */
-export function setDevHeaders(res: Response) {
-  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+export function setDevHeaders(res: Response): void {
+  // Prevent all caching during development
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
 }
 
 /**

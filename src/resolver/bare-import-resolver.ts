@@ -76,27 +76,54 @@ export async function resolveBareImport(
       console.log(
         `[SWITE] Package ${pkgName} not in node_modules, checking workspace...`,
       );
-      // Try workspace packages before CDN fallback
-      const workspacePkg = await context.resolveWorkspacePackage(pkgName);
-      if (workspacePkg) {
-        return await resolveWorkspacePackageEntry(
-          workspacePkg,
-          pkgName,
-          subPath,
-          specifier,
-          context,
-        );
-      }
 
-      // Not in workspace, use CDN (jsDelivr; esm.sh returns 500 for some packages)
-      console.warn(
-        `[SWITE] Package ${pkgName} not found, using CDN fallback`,
-      );
-      return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
+      // EMERGENCY FIX: For @swissjs/* packages, try direct path first
+      if (pkgName.startsWith('@swissjs/')) {
+        const pkgShortName = pkgName.replace('@swissjs/', '');
+
+        // Try relative path from SWS to swiss-lib
+        const potentialPaths = [
+          path.join(context.root, '../swiss-lib/packages', pkgShortName),
+          path.join(context.root, '../../swiss-lib/packages', pkgShortName),
+          path.join(context.root, '../../../swiss-lib/packages', pkgShortName),
+        ];
+
+        for (const candidatePath of potentialPaths) {
+          const candidatePkgJson = path.join(candidatePath, 'package.json');
+          if (await context.fileExists(candidatePkgJson)) {
+            console.log(`[SWITE] Emergency: Found ${pkgName} at ${candidatePath}`);
+            pkgDir = candidatePath;
+            pkgJsonPath = candidatePkgJson;
+            break;
+          }
+        }
+      }
+      
+      // If still not found, try workspace resolver
+      if (!pkgJsonPath || !pkgDir) {
+        const workspacePkg = await context.resolveWorkspacePackage(pkgName);
+        if (workspacePkg) {
+          return await resolveWorkspacePackageEntry(
+            workspacePkg,
+            pkgName,
+            subPath,
+            specifier,
+            context,
+          );
+        }
+
+        // Last resort: CDN fallback
+        console.warn(
+          `[SWITE] Package ${pkgName} not found anywhere, using CDN fallback`,
+        );
+        return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
+      }
     }
 
-    // Package found in node_modules
-    const pkgJson = JSON.parse(await fs.readFile(pkgJsonPath, "utf-8"));
+    // Continue with normal resolution if we found it
+    if (pkgJsonPath && pkgDir) {
+      return await resolveWorkspacePackageEntry(pkgDir, pkgJsonPath, specifier, context);
+    }
 
     // Check if this is a workspace package (symlinked)
     let realPkgDir: string;

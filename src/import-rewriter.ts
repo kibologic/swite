@@ -83,7 +83,7 @@ export async function rewriteImports(
           const match = quotedPattern.exec(code);
           if (match) {
             quoteChar = match[1];
-            actualSpecifier = match[0].slice(1, -1);
+            actualSpecifier = specifier;
             start = match.index!;
             end = match.index! + match[0].length;
           } else {

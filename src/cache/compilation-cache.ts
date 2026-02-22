@@ -95,6 +95,17 @@ export class CompilationCache {
       }
     }
 
+    // Check if cached content has stale CDN URLs (from before import rewriter fix)
+    if (entry.rewritten.includes("cdn.jsdelivr.net") || entry.rewritten.includes("esm.sh")) {
+      console.log(
+        chalk.yellow(
+          `[Cache] Invalidating ${filePath}: contains stale CDN URLs`,
+        ),
+      );
+      this.cache.delete(filePath);
+      return null;
+    }
+
     console.log(chalk.green(`[Cache] ✅ Cache hit for ${filePath}`));
     return entry.rewritten;
   }
