@@ -98,7 +98,7 @@ export async function resolveBareImport(
           }
         }
       }
-      
+
       // If still not found, try workspace resolver
       if (!pkgJsonPath || !pkgDir) {
         const workspacePkg = await context.resolveWorkspacePackage(pkgName);
@@ -122,7 +122,7 @@ export async function resolveBareImport(
 
     // Continue with normal resolution if we found it
     if (pkgJsonPath && pkgDir) {
-      return await resolveWorkspacePackageEntry(pkgDir, pkgJsonPath, specifier, context);
+      return await resolveWorkspacePackageEntry(pkgDir, pkgName, subPath, specifier, context);
     }
 
     // Check if this is a workspace package (symlinked)
