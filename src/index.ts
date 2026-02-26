@@ -19,3 +19,8 @@ export type {
 export { proxyToPython, initPythonProxy } from "./proxy/proxyToPython.js";
 export type { ProxyOptions } from "./proxy/proxyToPython.js";
 export { SwiteProxyError } from "./proxy/SwiteProxyError.js";
+export { loadUserConfig } from "./config-loader.js";
+export {
+  startPythonDevService,
+  stopPythonDevService,
+} from "./dev/pythonDevManager.js";
