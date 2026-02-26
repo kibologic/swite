@@ -9,3 +9,10 @@ export { SwiteBuilder, build } from "./builder.js";
 export type { BuildConfig } from "./builder.js";
 export { ModuleResolver } from "./resolver.js";
 export { HMREngine } from "./hmr.js";
+export { defineConfig } from "./config.js";
+export type {
+  SwiteUserConfig,
+  ServerConfig,
+  ServicesConfig,
+  PythonServiceConfig,
+} from "./config.js";
