@@ -16,3 +16,6 @@ export type {
   ServicesConfig,
   PythonServiceConfig,
 } from "./config.js";
+export { proxyToPython, initPythonProxy } from "./proxy/proxyToPython.js";
+export type { ProxyOptions } from "./proxy/proxyToPython.js";
+export { SwiteProxyError } from "./proxy/SwiteProxyError.js";
