@@ -7,6 +7,7 @@ import {
   startPythonDevService,
   stopPythonDevService,
 } from "./dev/pythonDevManager.js";
+import { setProductionMode } from "./proxy/proxyToPython.js";
 
 const [, , command, ...args] = process.argv;
 const root = resolve(process.cwd());
@@ -41,6 +42,32 @@ async function dev(): Promise<void> {
   await server.start();
 }
 
+async function start(): Promise<void> {
+  const config = await loadUserConfig(root);
+  const python = config.services?.python;
+
+  setProductionMode();
+
+  if (python && !process.env["PYTHON_SERVICE_URL"]) {
+    console.warn(
+      chalk.yellow(
+        "[swite] WARNING: services.python is configured but PYTHON_SERVICE_URL is not set.\n" +
+          "        Proxy calls to Python will fail. Set PYTHON_SERVICE_URL to the running service URL.",
+      ),
+    );
+  }
+
+  const server = new SwiteServer({
+    root,
+    port: config.server?.port ?? 3000,
+    host: config.server?.host ?? "localhost",
+    publicDir: "public",
+    open: false,
+  });
+
+  await server.start();
+}
+
 async function build(): Promise<void> {
   const { SwiteBuilder } = await import("./builder.js");
   const config = await loadUserConfig(root);
@@ -61,6 +88,13 @@ switch (command) {
     });
     break;
 
+  case "start":
+    start().catch((err: unknown) => {
+      console.error(chalk.red("[swite] fatal:"), err);
+      process.exit(1);
+    });
+    break;
+
   case "build":
     build().catch((err: unknown) => {
       console.error(chalk.red("[swite] build failed:"), err);
@@ -70,6 +104,6 @@ switch (command) {
 
   default:
     console.error(chalk.red(`[swite] unknown command: ${command ?? "(none)"}`));
-    console.error("Usage: swite <dev|build>");
+    console.error("Usage: swite <dev|build|start>");
     process.exit(1);
 }

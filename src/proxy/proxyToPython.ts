@@ -2,6 +2,15 @@ import type { PythonServiceConfig } from "../config.js";
 import { SwiteProxyError } from "./SwiteProxyError.js";
 
 let _pythonConfig: PythonServiceConfig | null = null;
+let _productionMode = false;
+
+/**
+ * Called by swite start on startup.
+ * Disables localhost fallback — PYTHON_SERVICE_URL is the only valid base URL.
+ */
+export function setProductionMode(): void {
+  _productionMode = true;
+}
 
 /**
  * Called by the swite dev process manager (S-03) on startup.
@@ -33,11 +42,13 @@ export async function proxyToPython<T>(options: ProxyOptions): Promise<T> {
   let baseUrl: string;
   if (envBaseUrl) {
     baseUrl = envBaseUrl.replace(/\/$/, "");
-  } else if (_pythonConfig) {
+  } else if (!_productionMode && _pythonConfig) {
     baseUrl = `http://localhost:${_pythonConfig.port}`;
   } else {
     throw new Error(
-      "Python service not configured. Call initPythonProxy() before using proxyToPython, or set PYTHON_SERVICE_URL.",
+      _productionMode
+        ? "PYTHON_SERVICE_URL is required in production mode but is not set."
+        : "Python service not configured. Call initPythonProxy() before using proxyToPython, or set PYTHON_SERVICE_URL.",
     );
   }
 
