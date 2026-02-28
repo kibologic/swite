@@ -165,6 +165,9 @@ export async function resolveBareImport(
       }
     }
 
+    // Read package.json for exports/main resolution
+    const pkgJson = JSON.parse(await fs.readFile(pkgJsonPath!, "utf-8"));
+
     // Handle exports field if present
     if (pkgJson.exports) {
       const exportKey = subPath ? `./${subPath}` : ".";
