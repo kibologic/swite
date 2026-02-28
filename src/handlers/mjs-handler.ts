@@ -59,6 +59,7 @@ export class MJSHandler extends BaseHandler {
     // Set proper MIME type for ES modules (.mjs)
     // According to MDN Web Standards: .mjs files should use "application/javascript"
     setDevHeaders(res);
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.send(rewritten);
   }
 }

@@ -652,24 +652,25 @@ export async function setupSPAFallback(
       console.log(chalk.yellow(`[SWITE CSS] Could not extract CSS imports: ${error instanceof Error ? error.message : String(error)}`));
     }
 
-    // Add import map to help browser resolve @swissjs/* packages
-    // This ensures the browser knows where to find these packages before SWITE rewrites them
+    // Add import map to help browser resolve bare module specifiers
     if (!html.includes('type="importmap"')) {
-      const importMap = `
-    <script type="importmap">
-    {
-      "imports": {
-        "@swissjs/core": "/swiss-packages/core/src/index.ts"
+      let importsObj: Record<string, string> = {};
+      const cachedMapPath = path.join(config.root, ".swite", "import-map.json");
+      try {
+        const raw = await fs.readFile(cachedMapPath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed?.imports && typeof parsed.imports === "object") {
+          importsObj = parsed.imports;
+          console.log(`[SWITE] Loaded import map from cache: ${Object.keys(importsObj).length} entries`);
+        }
+      } catch {
+        console.log("[SWITE] No cached import map found, using empty importmap");
       }
-    }
-    </script>`;
-      // Replace </head> (with or without spaces before it)
+      const importMap = `\n    <script type="importmap">\n    ${JSON.stringify({ imports: importsObj }, null, 2).replace(/\n/g, "\n    ")}\n    </script>`;
       const beforeReplace = html;
       html = html.replace(/\s*<\/head>/i, `${importMap}\n  </head>`);
       if (html === beforeReplace) {
-        console.warn(
-          "[SWITE] Failed to add import map - </head> not found or already replaced",
-        );
+        console.warn("[SWITE] Failed to add import map - </head> not found or already replaced");
       } else {
         console.log("[SWITE] Added import map for @swissjs/core");
       }

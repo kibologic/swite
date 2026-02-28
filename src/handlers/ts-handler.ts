@@ -163,6 +163,7 @@ export class TSHandler extends BaseHandler {
     }
 
     setDevHeaders(res);
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.send(rewritten);
   }
 }
