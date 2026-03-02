@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+  changeset-check:
+    name: Changeset check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changeset
+        run: |
+          git fetch origin main --quiet
+          ADDED=$(git diff --name-only --diff-filter=A origin/main HEAD -- '.changeset/*.md' | grep -v README | wc -l)
+          if [ "$ADDED" -eq 0 ]; then
+            echo "::warning::No changeset added in this PR. Run 'pnpm changeset' if this PR includes publishable changes."
+          else
+            echo "Changeset found ($ADDED file(s))."
+          fi

@@ -13,7 +13,10 @@
     "dev": "tsc -b --watch",
     "clean": "rm -rf dist node_modules && rm -f tsconfig.tsbuildinfo",
     "generate-import-map": "tsx src/utils/generate-import-map-cli.ts",
-    "test": "node --import tsx --test __tests__/import-rewriter-bug.test.ts"
+    "test": "node --import tsx --test __tests__/import-rewriter-bug.test.ts",
+    "changeset": "changeset",
+    "release:version": "changeset version",
+    "release:publish": "changeset publish"
   },
   "dependencies": {
     "@swissjs/core": "link:../swiss-lib/packages/core",
@@ -30,6 +33,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "18.19.121",
     "@types/ws": "^8.5.8",
+    "@changesets/cli": "^2.29.5",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   },
