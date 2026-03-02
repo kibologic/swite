@@ -1,5 +1,5 @@
 # DIRECTIVE — swite
-> Last updated: 2026-02-28 · Owner: Kibologic · Repo: kibologic/swite
+> Last updated: 2026-03-02 · Owner: Kibologic · Repo: kibologic/swite
 
 ---
 
@@ -374,6 +374,16 @@ SwissJS, Alpine ERP, Swite are global products.
 Remove all regional superlatives from every file.
 "Africa's first" or any regional label is wrong.
 Correct on sight in every session.
+
+---
+
+## Manual Actions Pending
+| ID   | Action                                              | Scope        | Status  |
+|------|-----------------------------------------------------|--------------|---------|
+| M-01 | Create @swissjs org on npmjs.com                   | npm          | PENDING |
+| M-03 | Add NPM_TOKEN secret to kibologic org GitHub        | GitHub org   | PENDING |
+| M-04 | Add CHANGESET_TOKEN secret to kibologic org GitHub  | GitHub org   | PENDING |
+| S-05 | Fix link: deps → proper semver deps before publish  | swite repo   | PENDING |
 
 ---
 
