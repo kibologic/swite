@@ -168,20 +168,22 @@ _Nothing completed yet. Append items here as sprints close._
 - Changesets: @changesets/cli
 - Pre-v1: publish 0.1.0 NOW alongside swiss-lib
 
-### Pipeline (to be implemented)
-File: .github/workflows/ci.yml
+### Pipeline (LIVE — commit cefd6ef, 2026-03-02)
+
+File: .github/workflows/ci.yml ✓
 Trigger: push to main, all PRs
-Jobs: pnpm install → pnpm build
+Jobs: pnpm install → pnpm build → pnpm test
+      changeset presence check on PRs (warn only)
 
-File: .github/workflows/release.yml
-Trigger: push to main when .changeset/ has entries
-Jobs: changeset version → bump version →
-      update CHANGELOG.md → open version bump PR
+File: .github/workflows/release.yml ✓
+Trigger: push to main
+Jobs: changesets/action — creates "Version Packages" PR
+      when .changeset/ has entries; publishes to npm
+      when version PR is merged; GitHub releases auto-created
 
-File: .github/workflows/publish.yml
-Trigger: push to main when version bump PR merged
-Jobs: pnpm publish --access public
-      → GitHub Release → tag vX.X.X
+File: .github/workflows/publish.yml ✓
+Trigger: manual (workflow_dispatch)
+Jobs: emergency re-publish with optional dry-run mode
 
 ### Secrets required
 NPM_TOKEN       — same token as swiss-lib
