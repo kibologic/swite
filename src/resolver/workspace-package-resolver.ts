@@ -35,8 +35,6 @@ export async function resolveWorkspacePackage(
     const fallbackPaths = [
       path.join(context.root, "..", ".."),
       path.join(context.root, ".."),
-      path.join(context.root, "..", "..", "..", "SwissEnterpriseRepo"),
-      path.join(context.root, "..", "..", "..", "..", "SwissEnterpriseRepo"),
     ];
 
     const detectedWorkspaceRoot = await context.getWorkspaceRoot();
@@ -44,7 +42,7 @@ export async function resolveWorkspacePackage(
       const hasLibraries = await context.fileExists(path.join(detectedWorkspaceRoot, "libraries"));
       const hasModules = await context.fileExists(path.join(detectedWorkspaceRoot, "modules"));
       if (hasLibraries || hasModules) {
-        console.log(`[SWITE] ✅ Found SwissEnterpriseRepo via getWorkspaceRoot(): ${detectedWorkspaceRoot}`);
+        console.log(`[SWITE] ✅ Found workspace root via getWorkspaceRoot(): ${detectedWorkspaceRoot}`);
         workspaceRoot = detectedWorkspaceRoot;
         workspaceRoots.push(workspaceRoot);
       }
@@ -63,17 +61,17 @@ export async function resolveWorkspacePackage(
 
       if (hasWorkspace || hasModules || hasLibraries || hasPackages || hasAiAgents) {
         workspaceRoot = normalizedFallback;
-        console.log(`[SWITE] ✅ Found SwissEnterpriseRepo at: ${workspaceRoot}`);
+        console.log(`[SWITE] ✅ Found workspace root at: ${workspaceRoot}`);
         workspaceRoots.push(workspaceRoot);
         break;
       }
     }
 
     if (!workspaceRoot) {
-      console.warn(`[SWITE] ⚠️ Could not find SwissEnterpriseRepo via fallback paths, trying getWorkspaceRoot()...`);
+      console.warn(`[SWITE] ⚠️ Could not find workspace root via fallback paths, trying getWorkspaceRoot()...`);
       workspaceRoot = await context.getWorkspaceRoot();
       if (workspaceRoot) {
-        console.log(`[SWITE] ✅ Found workspace root via getWorkspaceRoot(): ${workspaceRoot}`);
+        console.log(`[SWITE] ✅ Found workspace root via fallback getWorkspaceRoot(): ${workspaceRoot}`);
         workspaceRoots.push(workspaceRoot);
       } else {
         console.warn(`[SWITE] ⚠️ Could not find workspace root, using last resort path...`);

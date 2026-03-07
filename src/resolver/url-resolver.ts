@@ -208,13 +208,37 @@ export async function toUrl(
     // Fallback
     const fallbackWorkspaceRoot = await context.getWorkspaceRoot();
     const baseRoot = fallbackWorkspaceRoot || context.root;
-    const relative = path.relative(baseRoot, filePath);
-    const url = "/" + relative.replace(/\\/g, "/");
+    const rawRelative = path.relative(baseRoot, filePath);
+    // CG-03: path.relative() returns an absolute path when crossing drives or WSL mounts.
+    // Guard: if the result is absolute or escapes root with '..', strip prefix directly.
+    let url: string;
+    if (path.isAbsolute(rawRelative) || rawRelative.startsWith("..")) {
+      const normalizedBase = path.resolve(baseRoot).replace(/\\/g, "/");
+      const normalizedFile = path.resolve(filePath).replace(/\\/g, "/");
+      const stripped = normalizedFile.startsWith(normalizedBase)
+        ? normalizedFile.slice(normalizedBase.length)
+        : "/" + normalizedFile;
+      url = stripped.startsWith("/") ? stripped : "/" + stripped;
+    } else {
+      url = "/" + rawRelative.replace(/\\/g, "/");
+    }
     console.warn(`[SWITE] toUrl fallback: ${filePath} -> ${url} (may not work if path goes outside root)`);
     return normalizeResult(url);
   }
 
   // Default: make relative to root
-  const relative = path.relative(context.root, filePath);
-  return normalizeResult("/" + relative.replace(/\\/g, "/"));
+  const rawRelative = path.relative(context.root, filePath);
+  // CG-03: guard against absolute result from path.relative() on cross-drive/WSL paths.
+  let defaultUrl: string;
+  if (path.isAbsolute(rawRelative) || rawRelative.startsWith("..")) {
+    const normalizedRoot = path.resolve(context.root).replace(/\\/g, "/");
+    const normalizedFile = path.resolve(filePath).replace(/\\/g, "/");
+    const stripped = normalizedFile.startsWith(normalizedRoot)
+      ? normalizedFile.slice(normalizedRoot.length)
+      : "/" + normalizedFile;
+    defaultUrl = stripped.startsWith("/") ? stripped : "/" + stripped;
+  } else {
+    defaultUrl = "/" + rawRelative.replace(/\\/g, "/");
+  }
+  return normalizeResult(defaultUrl);
 }
