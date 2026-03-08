@@ -305,11 +305,24 @@ export class NodeModuleHandler extends BaseHandler {
   private getNodeModuleCdnRedirect(url: string): string | null {
     const prefix = "/node_modules/";
     if (!url.startsWith(prefix)) return null;
-    const after = url.slice(prefix.length);
+
+    // For nested paths like /node_modules/@scope/pkg/node_modules/dep/file.js,
+    // find the LAST node_modules segment and extract the package name from there.
+    const lastNodeModulesIdx = url.lastIndexOf("/node_modules/");
+    const after = url.slice(lastNodeModulesIdx + prefix.length);
     if (!after) return null;
-    // First segment is package name (or @scope/name for scoped packages)
-    const firstSlash = after.indexOf("/");
-    const pkgName = firstSlash === -1 ? after : after.slice(0, firstSlash);
+
+    // Extract package name: handle @scope/name and plain-name
+    let pkgName: string;
+    if (after.startsWith("@")) {
+      // Scoped package: need TWO path segments — @scope/name
+      const secondSlash = after.indexOf("/", after.indexOf("/") + 1);
+      pkgName = secondSlash === -1 ? after : after.slice(0, secondSlash);
+    } else {
+      const firstSlash = after.indexOf("/");
+      pkgName = firstSlash === -1 ? after : after.slice(0, firstSlash);
+    }
+
     if (!pkgName || pkgName === "." || pkgName === "..") return null;
     // jsDelivr +esm serves ESM build; works for reflect-metadata and most npm packages
     return `https://cdn.jsdelivr.net/npm/${pkgName}/+esm`;
