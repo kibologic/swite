@@ -6,6 +6,7 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { findSwissLibMonorepo } from "../utils/package-finder.js";
+import { lookupInSymlinkRegistry } from "./symlink-registry.js";
 
 export interface UrlResolverContext {
   root: string;
@@ -41,6 +42,36 @@ export async function toUrl(
   context: UrlResolverContext
 ): Promise<string> {
   const normalized = filePath.replace(/\\/g, "/");
+
+  // CG-03: Check symlink registry FIRST.
+  // Absolute filesystem paths (both realpath-resolved and unresolved symlinks)
+  // must be mapped back to browser URLs before the startsWith("/") early-return
+  // fires and mangled by normalizeResult().
+  // The registry maps realpath → /node_modules/<pkg> browser URL prefix.
+  if (path.isAbsolute(filePath)) {
+    // Direct lookup (path is already a realpath, e.g. from fs.realpath() in ts-handler)
+    let registryUrl = lookupInSymlinkRegistry(normalized);
+
+    // Fallback: resolve symlinks and retry (path may still contain symlink segments,
+    // e.g. app/node_modules/@alpine/core/... where app/node_modules is itself a symlink)
+    if (!registryUrl) {
+      try {
+        const realPath = (await fs.realpath(filePath)).replace(/\\/g, "/");
+        if (realPath !== normalized) {
+          registryUrl = lookupInSymlinkRegistry(realPath);
+        }
+      } catch {
+        // file may not exist yet; ignore
+      }
+    }
+
+    if (registryUrl) {
+      console.log(
+        `[SWITE] toUrl: symlink registry hit: ${filePath} → ${registryUrl}`
+      );
+      return registryUrl;
+    }
+  }
 
   // If path is already a URL (starts with / or http), check for source file first
   if (normalized.startsWith("/") || normalized.startsWith("http")) {
