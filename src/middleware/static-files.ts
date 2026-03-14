@@ -382,10 +382,24 @@ export async function setupStaticFiles(
     // Only serve /packages/ if they're already compiled assets (handled by handlers)
 
     // Serve modules/ directory (for CSS, assets, etc.)
+    // Source files (.ui, .uix, .ts) must NOT be served statically — they need
+    // to fall through to the compiler middleware (general handler). CG-07.
     const modulesPath = path.join(workspaceRoot, "modules");
     try {
       await fs.access(modulesPath);
-      app.use("/modules", express.static(modulesPath));
+      app.use("/modules", (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        const url = req.url.split("?")[0];
+        const isSourceFile =
+          url.endsWith(".ui") ||
+          url.endsWith(".uix") ||
+          url.endsWith(".ts") ||
+          (url.endsWith(".js") && !url.includes("node_modules")) ||
+          url.endsWith(".mjs");
+        if (isSourceFile) {
+          return next();
+        }
+        express.static(modulesPath)(req, res, next);
+      });
       console.log(
         chalk.gray(`  📦 Serving workspace modules/ from ${modulesPath}`),
       );
