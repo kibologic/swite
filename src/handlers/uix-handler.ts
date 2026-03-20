@@ -79,6 +79,16 @@ export class UIXHandler extends BaseHandler {
     const source = await fs.readFile(filePath, "utf-8");
     let compiled = await this.compiler.compileAsync(source, filePath);
 
+    // Transform TypeScript output to plain JavaScript via esbuild
+    const esbuild = await import("esbuild");
+    const tsResult = await esbuild.transform(compiled, {
+      loader: "ts",
+      format: "esm",
+      target: "esnext",
+      sourcefile: filePath,
+    });
+    compiled = tsResult.code;
+
     // CRITICAL: Strip /swiss-lib/ paths from compiled output BEFORE import rewriting
     // The compiler may output /swiss-lib/ paths directly in the code
     if (compiled.includes("/swiss-lib/")) {

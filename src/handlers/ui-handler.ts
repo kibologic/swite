@@ -92,6 +92,17 @@ export class UIHandler extends BaseHandler {
     console.log(chalk.yellow(`[.ui] Compiling file: ${filePath}`));
     console.log(chalk.yellow(`[.ui] Source starts with: ${source.substring(0, 50).replace(/\n/g, "\\n")}`));
     let compiled = await this.compiler.compileAsync(source, filePath);
+
+    // Transform TypeScript output to plain JavaScript via esbuild
+    const esbuild = await import("esbuild");
+    const tsResult = await esbuild.transform(compiled, {
+      loader: "ts",
+      format: "esm",
+      target: "esnext",
+      sourcefile: filePath,
+    });
+    compiled = tsResult.code;
+
     console.log(chalk.yellow(`[.ui] Compiled result starts with: ${compiled.substring(0, 50).replace(/\n/g, "\\n")}`));
 
     // CRITICAL: Strip /swiss-lib/ paths from compiled output BEFORE import rewriting
