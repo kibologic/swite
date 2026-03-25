@@ -154,6 +154,27 @@ _None discovered yet. Populate as development proceeds._
 
 ---
 
+## Compiler Gaps
+> Discovered during alpine-mobile Phase 5 build (2026-03-26). All fixed as hotfixes in swite/dist/ — need porting to swite source before next version cut.
+
+- **CG-01** CLI entry hardcoded as `.ts` — should resolve `.ui` — FIXED in `dist/cli.js` (needs porting to source)
+- **CG-02** `@swissjs/*` and `@skltn/*` not in externals — bundled instead of left as browser imports — FIXED in `dist/builder.js`
+- **CG-03** `findSwissFiles`/`findFiles` do not follow NTFS junctions (`isSymbolicLink()` check missing) — FIXED in `dist/builder.js`
+- **CG-04** Traversal enters `node_modules` via symlinks — `node_modules` not excluded from junction traversal — FIXED in `dist/builder.js`
+- **CG-05** `UiCompiler` rewrites `.ui` imports to `.js` but emits `.tsx` files — js-to-tsx esbuild plugin added as workaround — FIXED in `dist/builder.js`
+- **CG-06** Compiler emits named exports only — default imports fail at bundle time — `export default` injected post-compile — FIXED in `dist/builder.js`
+
+---
+
+## Session Log
+
+### 2026-03-26
+
+- Logged CG-01 through CG-06 from alpine-mobile Phase 5 build
+- All 6 fixed in swite/dist/ as hotfixes — need porting to swite source before next version cut
+
+---
+
 ## Done
 _Nothing completed yet. Append items here as sprints close._
 
