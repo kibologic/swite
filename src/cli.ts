@@ -73,7 +73,7 @@ async function build(): Promise<void> {
   const config = await loadUserConfig(root);
   const builder = new SwiteBuilder({
     root,
-    entry: resolve(root, "src/index.ts"),
+    entry: resolve(root, "src/index.ui"),
     outDir: resolve(root, "dist"),
   });
   await builder.build();

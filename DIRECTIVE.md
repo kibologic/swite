@@ -157,12 +157,12 @@ _None discovered yet. Populate as development proceeds._
 ## Compiler Gaps
 > Discovered during alpine-mobile Phase 5 build (2026-03-26). All fixed as hotfixes in swite/dist/ — need porting to swite source before next version cut.
 
-- **CG-01** CLI entry hardcoded as `.ts` — should resolve `.ui` — FIXED in `dist/cli.js` (needs porting to source)
-- **CG-02** `@swissjs/*` and `@skltn/*` not in externals — bundled instead of left as browser imports — FIXED in `dist/builder.js`
-- **CG-03** `findSwissFiles`/`findFiles` do not follow NTFS junctions (`isSymbolicLink()` check missing) — FIXED in `dist/builder.js`
-- **CG-04** Traversal enters `node_modules` via symlinks — `node_modules` not excluded from junction traversal — FIXED in `dist/builder.js`
-- **CG-05** `UiCompiler` rewrites `.ui` imports to `.js` but emits `.tsx` files — js-to-tsx esbuild plugin added as workaround — FIXED in `dist/builder.js`
-- **CG-06** Compiler emits named exports only — default imports fail at bundle time — `export default` injected post-compile — FIXED in `dist/builder.js`
+- **CG-01** CLI entry hardcoded as `.ts` — should resolve `.ui` — FIXED in source `src/cli.ts` line 76
+- **CG-02** `@swissjs/*` and `@skltn/*` not in externals — bundled instead of left as browser imports — FIXED in source `src/builder.ts` nodeBuiltins
+- **CG-03** `findSwissFiles`/`findFiles` do not follow NTFS junctions (`isSymbolicLink()` check missing) — FIXED in source `src/builder.ts`
+- **CG-04** Traversal enters `node_modules` via symlinks — `node_modules` not excluded from junction traversal — FIXED in source `src/builder.ts`
+- **CG-05** `UiCompiler` rewrites `.ui` imports to `.js` but emits `.tsx` files — `jsTsxFallbackPlugin` added — FIXED in source `src/builder.ts`
+- **CG-06** Compiler emits named exports only — default imports fail at bundle time — `export default` injected post-compile — FIXED in source `src/builder.ts`
 
 ---
 
@@ -172,6 +172,9 @@ _None discovered yet. Populate as development proceeds._
 
 - Logged CG-01 through CG-06 from alpine-mobile Phase 5 build
 - All 6 fixed in swite/dist/ as hotfixes — need porting to swite source before next version cut
+- Fixed CG-01 through CG-06 in swite source (src/cli.ts + src/builder.ts)
+- swite tsc build fails on swiss-lib project reference errors (pre-existing TD-02) — dist updated via linter auto-compile
+- Verified alpine-mobile build passes end-to-end: dist/index.js 30.5kb ✅
 
 ---
 

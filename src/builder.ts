@@ -142,6 +142,12 @@ export class SwiteBuilder {
         "import '$1tsx'",
       );
 
+      // Add export default for the named export so default imports resolve at bundle time
+      const namedExportMatch = compiled.match(/export\s*\{\s*(\w+)\s*\}\s*;?\s*$/);
+      if (namedExportMatch?.[1]) {
+        compiled += `\nexport default ${namedExportMatch[1]};\n`;
+      }
+
       await fs.writeFile(outputPath, compiled, "utf-8");
 
       console.log(chalk.gray(`  ✓ [${label}] ${relativePath}`));
@@ -379,6 +385,9 @@ export class SwiteBuilder {
     // Mark Node.js built-ins and build-time-only deps as external
     const nodeBuiltins = [
       "@swissjs/swite",
+      "@swissjs/core",
+      "@swissjs/*",
+      "@skltn/*",
       "fs",
       "path",
       "os",
@@ -416,6 +425,24 @@ export class SwiteBuilder {
       "fs/promises",
       "node:fs/promises",
     ];
+
+    // Resolve relative .js imports to .tsx when UiCompiler rewrites .ui→.js but emits .tsx files
+    const jsTsxFallbackPlugin: Plugin = {
+      name: "js-tsx-fallback",
+      setup(build) {
+        build.onResolve({ filter: /\.js$/ }, async (args) => {
+          if (!args.path.startsWith(".")) return undefined;
+          const jsPath = path.resolve(path.dirname(args.resolveDir), args.path);
+          const tsxPath = jsPath.replace(/\.js$/, ".tsx");
+          try {
+            await fs.access(tsxPath);
+            return { path: tsxPath };
+          } catch {
+            return undefined;
+          }
+        });
+      },
+    };
 
     // Stub .css imports so they resolve (build output may copy CSS separately)
     const cssStubPlugin: Plugin = {
@@ -759,7 +786,7 @@ export class SwiteBuilder {
       metafile: true,
       logLevel: "info",
       absWorkingDir, // Help esbuild resolve modules from workspace root
-      plugins: [cssStubPlugin, workspaceResolverPlugin],
+      plugins: [jsTsxFallbackPlugin, cssStubPlugin, workspaceResolverPlugin],
     };
 
     // Add aliases via plugins if esbuild version supports it
@@ -803,9 +830,10 @@ export class SwiteBuilder {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
+        if (entry.name === "node_modules") continue;
         const fullPath = path.join(dir, entry.name);
 
-        if (entry.isDirectory()) {
+        if (entry.isDirectory() || entry.isSymbolicLink()) {
           files.push(...(await this.findSwissFiles(fullPath)));
         } else if (entry.name.endsWith(".ui") || entry.name.endsWith(".uix")) {
           files.push(fullPath);
@@ -825,9 +853,10 @@ export class SwiteBuilder {
       const entries = await fs.readdir(dir, { withFileTypes: true });
 
       for (const entry of entries) {
+        if (entry.name === "node_modules") continue;
         const fullPath = path.join(dir, entry.name);
 
-        if (entry.isDirectory()) {
+        if (entry.isDirectory() || entry.isSymbolicLink()) {
           files.push(...(await this.findFiles(fullPath, pattern)));
         } else if (pattern.test(entry.name)) {
           files.push(fullPath);
