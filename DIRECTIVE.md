@@ -169,6 +169,8 @@ _None discovered yet. Populate as development proceeds._
 - Fixed S-07: findSwissLibMonorepo now scans immediate subdirs one level deeper
 - alpine-mobile build on Linux blocked by missing NTFS junctions (src/modules, src/packages) — pre-existing Linux env constraint, not caused by these changes
 - Commit: 4cf8c6e
+- Bumped version to 0.2.0 (commit fd039ce) — wrote CHANGELOG.md covering CG-01–06 and 0.1.0 baseline
+- swiss-lib CG fixes committed (commit 6d9c296): CG-03/04/05 in compiler + core hookRegistry alignment + cli traversal
 
 ---
 
