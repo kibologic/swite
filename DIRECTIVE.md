@@ -70,15 +70,10 @@ Acceptance: `swite start` with no `PYTHON_SERVICE_URL` set logs a clear warning 
 
 ---
 
-### S-06 — Fix module resolver — search parent node_modules
-Swite resolver searches `app/node_modules/` but pnpm installs
-to `apps/server/node_modules/`. Resolver must walk up the
-directory tree to find node_modules, not just check app root.
-Currently worked around via Windows directory junction in alpine-erp.
-
-Root cause in `bare-import-resolver.ts`: `nodeModulesLocations` only includes
-`path.join(context.root, "node_modules")` and `workspaceRoot/node_modules`.
-Must also include `path.join(path.dirname(context.root), "node_modules")`.
+### ✅ S-06 — Fix module resolver — search parent node_modules (COMPLETED 2026-03-26)
+Added `path.join(path.dirname(context.root), "node_modules")` to `nodeModulesLocations`
+in `src/resolver/bare-import-resolver.ts`. Resolver now checks parent directory node_modules
+in addition to app root and workspace root.
 
 ---
 
@@ -130,15 +125,10 @@ before `res.send()` in:
 
 ---
 
-### S-07 — Fix findSwissLibMonorepo path
-`findSwissLibMonorepo` checks for `swiss-lib/` as a direct child of ancestor
-directories but the SWS monorepo has it at `SWS/swiss-lib/`. Function must
-also check one level deeper (e.g. `{dir}/SWS/swiss-lib`).
-Currently worked around via `.swite/import-map.json` fast-path bypass.
-
-Root cause in `utils/package-finder.ts`: Only checks `path.join(current, "swiss-lib")`
-and `path.join(current, "SWISS")`. Must also scan immediate subdirectories for
-a `swiss-lib/` child.
+### ✅ S-07 — Fix findSwissLibMonorepo path (COMPLETED 2026-03-26)
+`findSwissLibMonorepo` in `src/utils/package-finder.ts` now scans immediate
+subdirectories of each ancestor (excluding node_modules) for a `swiss-lib/` child.
+Handles `SWS/swiss-lib/` and any other one-level-deep monorepo layouts.
 
 ---
 
@@ -175,6 +165,10 @@ _None discovered yet. Populate as development proceeds._
 - Fixed CG-01 through CG-06 in swite source (src/cli.ts + src/builder.ts)
 - swite tsc build fails on swiss-lib project reference errors (pre-existing TD-02) — dist updated via linter auto-compile
 - Verified alpine-mobile build passes end-to-end: dist/index.js 30.5kb ✅
+- Fixed S-06: parent node_modules added to bare-import-resolver nodeModulesLocations
+- Fixed S-07: findSwissLibMonorepo now scans immediate subdirs one level deeper
+- alpine-mobile build on Linux blocked by missing NTFS junctions (src/modules, src/packages) — pre-existing Linux env constraint, not caused by these changes
+- Commit: [pending]
 
 ---
 

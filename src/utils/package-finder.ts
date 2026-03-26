@@ -52,11 +52,31 @@ export async function findSwissLibMonorepo(startPath: string): Promise<string | 
       // Continue searching
     }
     
+    // Scan immediate subdirectories of `current` for a swiss-lib/ child
+    try {
+      const entries = await fs.readdir(current, { withFileTypes: true });
+      const subdirs = entries.filter(
+        (e) => e.name !== "node_modules" && (e.isDirectory() || e.isSymbolicLink())
+      );
+      for (const entry of subdirs) {
+        const sub = path.join(current, entry.name);
+        const subSwissLib = path.join(sub, "swiss-lib");
+        const subPkgJson = path.join(subSwissLib, "package.json");
+        const subCorePkgJson = path.join(subSwissLib, "packages", "core", "package.json");
+        if (await fileExists(subPkgJson) || await fileExists(subCorePkgJson)) {
+          console.log(`[package-finder] Found swiss-lib via subdir scan at: ${subSwissLib}`);
+          return subSwissLib;
+        }
+      }
+    } catch {
+      // Skip on permission errors
+    }
+
     const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
   }
-  
+
   return null;
 }
 

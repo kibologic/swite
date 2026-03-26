@@ -42,6 +42,7 @@ export async function resolveBareImport(
 
     const nodeModulesLocations: string[] = [
       path.join(context.root, "node_modules"),
+      path.join(path.dirname(context.root), "node_modules"),
     ];
 
     // Add workspace root node_modules
