@@ -168,7 +168,7 @@ _None discovered yet. Populate as development proceeds._
 - Fixed S-06: parent node_modules added to bare-import-resolver nodeModulesLocations
 - Fixed S-07: findSwissLibMonorepo now scans immediate subdirs one level deeper
 - alpine-mobile build on Linux blocked by missing NTFS junctions (src/modules, src/packages) — pre-existing Linux env constraint, not caused by these changes
-- Commit: [pending]
+- Commit: 4cf8c6e
 
 ---
 
