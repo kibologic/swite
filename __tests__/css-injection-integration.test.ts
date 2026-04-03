@@ -124,13 +124,13 @@ describe("CSS Injection Integration", () => {
 
     try {
       // Create index.ui (entry point)
-      const indexUi = `import { SwissApp } from '@swissjs/core'
+      const indexUi = `import { SwissApp } from '@kibologic/core'
 import { App } from './App.uix'
 
 SwissApp.mount(App, '#root')`;
 
       // Create App.uix with CSS imports (matching pos-site structure)
-      const appUix = `import { SwissComponent } from '@swissjs/core'
+      const appUix = `import { SwissComponent } from '@kibologic/core'
 import './styles/globals.css'
 import './styles/cyber-theme.css'
 
@@ -208,12 +208,12 @@ export class App extends SwissComponent {
     await fs.mkdir(srcDir, { recursive: true });
 
     try {
-      const indexUi = `import { SwissApp } from '@swissjs/core'
+      const indexUi = `import { SwissApp } from '@kibologic/core'
 import { App } from './App.uix'
 
 SwissApp.mount(App, '#root')`;
 
-      const appUix = `import { SwissComponent } from '@swissjs/core'
+      const appUix = `import { SwissComponent } from '@kibologic/core'
 
 export class App extends SwissComponent {
   render() {

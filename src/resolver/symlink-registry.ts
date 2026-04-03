@@ -98,7 +98,7 @@ async function registerSymlink(
  *
  * Example:
  *   /mnt/c/.../swiss-lib/packages/core/src/index.ts
- *   → /node_modules/@swissjs/core/src/index.ts
+ *   → /node_modules/@kibologic/core/src/index.ts
  */
 export function lookupInSymlinkRegistry(absolutePath: string): string | null {
   const normalized = absolutePath.replace(/\\/g, "/");

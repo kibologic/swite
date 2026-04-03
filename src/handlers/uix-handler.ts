@@ -6,7 +6,7 @@
 
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
-import { UiCompiler } from "@swissjs/compiler";
+import { UiCompiler } from "@kibologic/compiler";
 import chalk from "chalk";
 import { rewriteImports } from "../import-rewriter.js";
 import { compilationCache } from "../cache/compilation-cache.js";

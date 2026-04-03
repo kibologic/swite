@@ -5,7 +5,7 @@
  */
 
 import type { Express } from "express";
-import type { RouteDefinition } from "@swissjs/core";
+import type { RouteDefinition } from "@kibologic/core";
 import { HMREngine } from "../hmr.js";
 
 export interface HMRRoutesConfig {

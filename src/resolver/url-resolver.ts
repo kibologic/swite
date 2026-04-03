@@ -114,7 +114,7 @@ export async function toUrl(
   if (path.isAbsolute(filePath)) {
     const workspaceRoot = await context.getWorkspaceRoot();
 
-    // Check if this is a swiss-lib monorepo package (@swissjs/*)
+    // Check if this is a swiss-lib monorepo package (@kibologic/*)
     const swissLib = await findSwissLibMonorepo(context.root);
     console.log(`[SWITE] toUrl: swiss-lib check - swissLib=${swissLib}, this.root=${context.root}, filePath=${filePath}`);
     if (swissLib) {

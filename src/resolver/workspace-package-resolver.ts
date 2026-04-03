@@ -26,7 +26,7 @@ export async function resolveWorkspacePackage(
   if (
     pkgName.startsWith("@swiss-enterprise/") ||
     pkgName.startsWith("@swiss-module/") ||
-    pkgName.startsWith("@swiss-package/") ||
+    pkgName.startsWith("@kibologic/") ||
     pkgName.startsWith("@swiss-framework/")
   ) {
     console.log(`[SWITE] Looking for SWS root for @swiss-enterprise package...`);
@@ -110,8 +110,8 @@ export async function resolveWorkspacePackage(
     }
   }
 
-  // For @swissjs/* packages, also check swiss-lib monorepo
-  if (pkgName.startsWith("@swissjs/")) {
+  // For @kibologic/* packages, also check swiss-lib monorepo
+  if (pkgName.startsWith("@kibologic/")) {
     const swissLib = await findSwissLibMonorepo(context.root);
     if (swissLib) {
       console.log(`[SWITE] Found swiss-lib monorepo at ${swissLib}`);
@@ -136,8 +136,8 @@ export async function resolveWorkspacePackage(
   
   const additionalRoots: string[] = workspaceRoots.slice(1);
   
-  // Add swiss-lib monorepo if it exists (for @swissjs/* packages)
-  if (pkgName.startsWith("@swissjs/")) {
+  // Add swiss-lib monorepo if it exists (for @kibologic/* packages)
+  if (pkgName.startsWith("@kibologic/")) {
     try {
       const swissLib = await findSwissLibMonorepo(context.root);
       if (swissLib && !additionalRoots.includes(swissLib) && swissLib !== primaryRoot) {
@@ -165,9 +165,9 @@ export async function resolveWorkspacePackage(
       console.error(`[SWITE] Error scanning package registry:`, error.message);
       console.error(`[SWITE] Stack:`, error.stack);
     }
-  } else if (registry.getPackageCount() && pkgName.startsWith("@swissjs/")) {
+  } else if (registry.getPackageCount() && pkgName.startsWith("@kibologic/")) {
     // Registry already scanned but may not have swiss-lib/packages
-    // Check if @swissjs/core is missing from registry
+    // Check if @kibologic/core is missing from registry
     const existingPkg = registry.findPackage(pkgName);
     if (!existingPkg) {
       console.log(`[SWITE] ${pkgName} not in registry, forcing rescan with swiss-lib/packages...`);

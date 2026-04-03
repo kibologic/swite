@@ -6,7 +6,7 @@
 
 import { build as esbuild, type Plugin } from "esbuild";
 import type { BuildOptions } from "esbuild";
-import { UiCompiler } from "@swissjs/compiler";
+import { UiCompiler } from "@kibologic/compiler";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
@@ -384,10 +384,10 @@ export class SwiteBuilder {
 
     // Mark Node.js built-ins and build-time-only deps as external
     const nodeBuiltins = [
-      "@swissjs/swite",
-      "@swissjs/core",
-      "@swissjs/*",
-      "@skltn/*",
+      "@kibologic/swite",
+      "@kibologic/core",
+      "@kibologic/*",
+      "@kibologic/*",
       "fs",
       "path",
       "os",

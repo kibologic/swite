@@ -1,5 +1,5 @@
 /*
- * Bare Import Resolver - Resolves bare module specifiers (@swissjs/core, etc.)
+ * Bare Import Resolver - Resolves bare module specifiers (@kibologic/core, etc.)
  * Extracted from resolver.ts for modularity
  */
 
@@ -16,7 +16,7 @@ export interface BareImportResolverContext extends UrlResolverContext {
 }
 
 /**
- * Resolve bare import specifier (e.g., @swissjs/core, react, etc.)
+ * Resolve bare import specifier (e.g., @kibologic/core, react, etc.)
  */
 export async function resolveBareImport(
   specifier: string,
@@ -24,7 +24,7 @@ export async function resolveBareImport(
 ): Promise<string> {
   console.log(`[SWITE] resolveBareImport CALLED: ${specifier}`);
   try {
-    // Handle scoped packages (@swissjs/core) and regular packages
+    // Handle scoped packages (@kibologic/core) and regular packages
     const parts = specifier.split("/");
     const isScoped = specifier.startsWith("@");
     const pkgName = isScoped ? `${parts[0]}/${parts[1]}` : parts[0];
@@ -78,9 +78,9 @@ export async function resolveBareImport(
         `[SWITE] Package ${pkgName} not in node_modules, checking workspace...`,
       );
 
-      // EMERGENCY FIX: For @swissjs/* packages, try direct path first
-      if (pkgName.startsWith('@swissjs/')) {
-        const pkgShortName = pkgName.replace('@swissjs/', '');
+      // EMERGENCY FIX: For @kibologic/* packages, try direct path first
+      if (pkgName.startsWith('@kibologic/')) {
+        const pkgShortName = pkgName.replace('@kibologic/', '');
 
         // Try relative path from SWS to swiss-lib
         const potentialPaths = [

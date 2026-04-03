@@ -686,7 +686,7 @@ export async function setupSPAFallback(
       if (html === beforeReplace) {
         console.warn("[SWITE] Failed to add import map - </head> not found or already replaced");
       } else {
-        console.log("[SWITE] Added import map for @swissjs/core");
+        console.log("[SWITE] Added import map for @kibologic/core");
       }
     } else {
       console.log("[SWITE] Import map already exists in HTML");

@@ -7,9 +7,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import type { RouteDefinition } from "@swissjs/core";
-import { RouteScanner } from "@swissjs/plugin-file-router/core";
-import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
+import type { RouteDefinition } from "@kibologic/core";
+import { RouteScanner } from "@kibologic/plugin-file-router/core";
+import { createFileWatcher } from "@kibologic/plugin-file-router/dev";
 import { HMREngine } from "../hmr.js";
 import { findWorkspaceRoot } from "../utils/workspace.js";
 

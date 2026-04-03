@@ -6,9 +6,9 @@
 
 import type { Express, Request, Response, NextFunction } from "express";
 import express from "express";
-import type { RouteDefinition } from "@swissjs/core";
-import { RouteScanner } from "@swissjs/plugin-file-router/core";
-import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
+import type { RouteDefinition } from "@kibologic/core";
+import { RouteScanner } from "@kibologic/plugin-file-router/core";
+import { createFileWatcher } from "@kibologic/plugin-file-router/dev";
 import chalk from "chalk";
 import path from "path";
 import fs from "fs/promises";

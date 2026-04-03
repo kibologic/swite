@@ -105,11 +105,11 @@ export async function findPackage(
     }
   }
   
-  // 3. Check swiss-lib monorepo (for @swissjs/* packages)
-  if (packageName.startsWith("@swissjs/")) {
+  // 3. Check swiss-lib monorepo (for @kibologic/* packages)
+  if (packageName.startsWith("@kibologic/")) {
     const swissLib = await findSwissLibMonorepo(startPath);
     if (swissLib) {
-      const packageDir = packageName.replace("@swissjs/", "");
+      const packageDir = packageName.replace("@kibologic/", "");
       const swissPackage = path.join(swissLib, "packages", packageDir);
       if (await fileExists(path.join(swissPackage, "package.json"))) {
         return { path: swissPackage, type: 'swiss-lib' };

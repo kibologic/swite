@@ -27,13 +27,13 @@ describe("CSS Extraction", () => {
     await fs.mkdir(path.join(srcDir, "styles"), { recursive: true });
 
     // Create index.ui that imports App.uix
-    const indexUi = `import { SwissApp } from '@swissjs/core'
+    const indexUi = `import { SwissApp } from '@kibologic/core'
 import { App } from './App.uix'
 
 SwissApp.mount(App, '#root')`;
 
     // Create App.uix with CSS imports
-    const appUix = `import { SwissComponent } from '@swissjs/core'
+    const appUix = `import { SwissComponent } from '@kibologic/core'
 import './styles/globals.css'
 import './styles/cyber-theme.css'
 
@@ -175,12 +175,12 @@ export class App extends SwissComponent {
     await fs.mkdir(path.join(srcDir, "styles"), { recursive: true });
     await fs.mkdir(path.join(srcDir, "components"), { recursive: true });
 
-    const indexUi = `import { SwissApp } from '@swissjs/core'
+    const indexUi = `import { SwissApp } from '@kibologic/core'
 import { App } from './App.uix'
 
 SwissApp.mount(App, '#root')`;
 
-    const appUix = `import { SwissComponent } from '@swissjs/core'
+    const appUix = `import { SwissComponent } from '@kibologic/core'
 import { Header } from './components/Header.uix'
 
 export class App extends SwissComponent {
@@ -189,7 +189,7 @@ export class App extends SwissComponent {
   }
 }`;
 
-    const headerUix = `import { SwissComponent } from '@swissjs/core'
+    const headerUix = `import { SwissComponent } from '@kibologic/core'
 import '../styles/globals.css'
 import '../styles/cyber-theme.css'
 

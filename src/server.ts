@@ -4,9 +4,9 @@
  * Licensed under the MIT License.
  */
 
-import type { RouteDefinition } from "@swissjs/core";
-import { RouteScanner } from "@swissjs/plugin-file-router/core";
-import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
+import type { RouteDefinition } from "@kibologic/core";
+import { RouteScanner } from "@kibologic/plugin-file-router/core";
+import { createFileWatcher } from "@kibologic/plugin-file-router/dev";
 import express from "express";
 import path from "node:path";
 import { promises as fs } from "node:fs";

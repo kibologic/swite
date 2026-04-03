@@ -5,7 +5,7 @@ import { ModuleResolver } from '../src/resolver.js';
 
 describe('Import Rewriter - Malformed Import Bug', () => {
   it('should not create malformed imports when rewriting multiple imports', async () => {
-    const code = `import { SwissApp } from '@swissjs/core'
+    const code = `import { SwissApp } from '@kibologic/core'
 import { App } from './App.uix'
 import { PosAgent } from '@swiss-enterprise/ai-agents'
 import { registerBusinessModules } from './modules/index.ui'`;
