@@ -83,6 +83,10 @@ export class SwiteServer {
     try {
       const nodeModulesDirs: string[] = [
         path.join(this.config.root, "node_modules"),
+        // Also scan the server package's own node_modules (one level up from the
+        // app root, e.g. apps/server/node_modules) — pnpm places workspace package
+        // symlinks there, not in the app root's node_modules subfolder.
+        path.join(path.dirname(this.config.root), "node_modules"),
       ];
       const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
       if (workspaceRoot) {
