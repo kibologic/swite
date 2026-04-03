@@ -106,7 +106,10 @@ export async function toUrl(
       return normalizeResult(workingPath);
     }
     
-    if (workingPath.includes("/dist/") && !workingPath.includes("/src/")) {
+    // Only prefer src over dist for workspace/swiss packages — never for node_modules
+    // (published packages only ship dist; the swiss-lib monorepo finder can
+    // accidentally resolve src/index.ts from a sibling repo for npm packages)
+    if (workingPath.includes("/dist/") && !workingPath.includes("/src/") && !workingPath.includes("/node_modules/")) {
       const srcPath = workingPath.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
       console.log(`[SWITE] toUrl: Checking for source file: ${srcPath}`);
       const { resolveFilePath } = await import("../utils/file-path-resolver.js");
