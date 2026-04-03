@@ -71,6 +71,17 @@ export async function toUrl(
       );
       return registryUrl;
     }
+
+    // If the absolute filesystem path contains /node_modules/, convert it to a
+    // browser-relative URL (/node_modules/...) before the startsWith("/") early
+    // return below swallows it as an already-resolved URL.
+    if (normalized.toLowerCase().includes("/node_modules/")) {
+      const nodeModulesIndex = normalized.toLowerCase().indexOf("/node_modules/");
+      const afterNodeModules = normalized.slice(nodeModulesIndex + "/node_modules/".length);
+      const url = "/node_modules/" + afterNodeModules;
+      console.log(`[SWITE] toUrl: abs→node_modules URL: ${filePath} → ${url}`);
+      return normalizeResult(url);
+    }
   }
 
   // If path is already a URL (starts with / or http), check for source file first

@@ -96,10 +96,10 @@ export async function rewriteImports(
         }
       }
 
-      // CRITICAL: Fix compiler bug where .uix/.ui imports are changed to .js
+      // CRITICAL: Fix compiler bug where .uix/.ui imports are changed to .js or .tsx
       // In dev mode, we need to preserve correct extensions for relative imports
       // Context-aware: SWISS packages use .ts, app files use .uix/.ui
-      if (actualSpecifier.startsWith(".") && actualSpecifier.endsWith(".js") && !actualSpecifier.includes("node_modules")) {
+      if (actualSpecifier.startsWith(".") && (actualSpecifier.endsWith(".js") || actualSpecifier.endsWith(".tsx")) && !actualSpecifier.includes("node_modules")) {
         console.log(
           `[SWITE] import-rewriter: 🔧 Found relative .js import that needs fixing: "${actualSpecifier}"`,
         );
@@ -127,7 +127,7 @@ export async function rewriteImports(
         } else if (isUixFile) {
           // If importing from a .uix/.ui file, try to preserve the original extension
           // Check if the file exists with .ui extension first, then .uix
-          const baseSpecifier = actualSpecifier.slice(0, -3); // Remove .js
+          const baseSpecifier = actualSpecifier.endsWith(".tsx") ? actualSpecifier.slice(0, -4) : actualSpecifier.slice(0, -3); // Remove .tsx or .js
           
           // Get the directory of the CURRENT file being rewritten (not project root)
           const currentDir = path.dirname(importer);
@@ -168,7 +168,7 @@ export async function rewriteImports(
           newExtension = ".ts";
         }
         
-        const baseSpecifier = actualSpecifier.slice(0, -3); // Remove .js
+        const baseSpecifier = actualSpecifier.endsWith(".tsx") ? actualSpecifier.slice(0, -4) : actualSpecifier.slice(0, -3); // Remove .tsx or .js
         const newSpecifier = baseSpecifier + newExtension;
         
         console.log(
@@ -344,7 +344,7 @@ export async function rewriteImports(
     // - If importer is in /swiss-packages/, change .js to .ts (SWISS packages use .ts)
     // - If importer is a .uix/.ui file, change .js to .uix (app files)
     // - Otherwise, change .js to .ts (default for TypeScript files)
-    const relativeJsImportRegex = /from\s+(["'])(\.\.?\/[^"']*?)(\.js)(\1)/g;
+    const relativeJsImportRegex = /from\s+(["'])(\.\.?\/[^"']*?)(\.js|\.tsx)(\1)/g;
     const beforeRegexFix = rewritten;
     let regexFixCount = 0;
     // Normalize path separators for Windows compatibility
