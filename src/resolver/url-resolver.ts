@@ -82,6 +82,28 @@ export async function toUrl(
       console.log(`[SWITE] toUrl: abs→node_modules URL: ${filePath} → ${url}`);
       return normalizeResult(url);
     }
+
+    // Convert absolute workspace/app paths to browser-relative URLs before the
+    // startsWith("/") early-return below treats them as already-resolved URLs.
+    // e.g. /app/modules/pos/src/index.ui → /modules/pos/src/index.ui
+    const workspaceRootForAbs = await context.getWorkspaceRoot();
+    const normalizedLower = normalized.toLowerCase();
+    if (workspaceRootForAbs) {
+      const wsRoot = path.resolve(workspaceRootForAbs).replace(/\\/g, "/");
+      if (normalizedLower.startsWith(wsRoot.toLowerCase() + "/") || normalizedLower === wsRoot.toLowerCase()) {
+        const relative = normalized.slice(wsRoot.length);
+        const url = relative.startsWith("/") ? relative : "/" + relative;
+        console.log(`[SWITE] toUrl: abs→workspace URL: ${filePath} → ${url}`);
+        return normalizeResult(url);
+      }
+    }
+    const appRoot = path.resolve(context.root).replace(/\\/g, "/");
+    if (normalizedLower.startsWith(appRoot.toLowerCase() + "/") || normalizedLower === appRoot.toLowerCase()) {
+      const relative = normalized.slice(appRoot.length);
+      const url = relative.startsWith("/") ? relative : "/" + relative;
+      console.log(`[SWITE] toUrl: abs→approot URL: ${filePath} → ${url}`);
+      return normalizeResult(url);
+    }
   }
 
   // If path is already a URL (starts with / or http), check for source file first
