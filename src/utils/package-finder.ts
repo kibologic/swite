@@ -50,6 +50,13 @@ export async function findSiblingRepository(startPath: string, repoName: string)
 }
 
 /**
+ * Backward compatibility wrapper for finding swiss-lib
+ */
+export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
+  return findSiblingRepository(startPath, 'swiss-lib');
+}
+
+/**
  * Find a specific package by name, with priority given based on environment.
  * In development, we prioritize local sibling source code.
  */
