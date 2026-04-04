@@ -18,86 +18,73 @@ export interface PackageLocation {
 }
 
 /**
- * Find swiss-lib monorepo by searching for swiss-lib/package.json or swiss-lib/packages/core
+ * Find any Kibologic sibling monorepo (e.g. swiss-lib, alpine-shell) by searching for its package.json
  */
-export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
+export async function findSiblingRepository(startPath: string, repoName: string): Promise<string | null> {
   let current = startPath;
-  for (let i = 0; i < 20; i++) { // Search up to 20 levels
-    // Check for swiss-lib directory with packages/core
-    const swissLibPath = path.join(current, "swiss-lib");
-    const swissLibPackageJson = path.join(swissLibPath, "package.json");
-    const corePackage = path.join(swissLibPath, "packages", "core", "package.json");
-    
-    try {
-      // Check if swiss-lib exists and has core package
-      if (await fileExists(swissLibPackageJson) || await fileExists(corePackage)) {
-        console.log(`[package-finder] Found swiss-lib at: ${swissLibPath}`);
-        return swissLibPath;
-      }
-    } catch {
-      // Continue searching
+  for (let i = 0; i < 20; i++) {
+    const siblingPath = path.join(current, repoName);
+    const pkgJson = path.join(siblingPath, "package.json");
+    if (await fileExists(pkgJson)) {
+      return siblingPath;
     }
-    
-    // Also check for legacy SWISS directory
-    const swissPath = path.join(current, "SWISS");
-    const swissPackageJson = path.join(swissPath, "package.json");
-    const swissCorePackage = path.join(swissPath, "packages", "core", "package.json");
-    
-    try {
-      if (await fileExists(swissPackageJson) || await fileExists(swissCorePackage)) {
-        console.log(`[package-finder] Found legacy SWISS at: ${swissPath}`);
-        return swissPath;
-      }
-    } catch {
-      // Continue searching
-    }
-    
-    // Scan immediate subdirectories of `current` for a swiss-lib/ child
+
+    // Also check for subdirectories if we're at a potential project root
     try {
       const entries = await fs.readdir(current, { withFileTypes: true });
-      const subdirs = entries.filter(
-        (e) => e.name !== "node_modules" && (e.isDirectory() || e.isSymbolicLink())
-      );
-      for (const entry of subdirs) {
-        const sub = path.join(current, entry.name);
-        const subSwissLib = path.join(sub, "swiss-lib");
-        const subPkgJson = path.join(subSwissLib, "package.json");
-        const subCorePkgJson = path.join(subSwissLib, "packages", "core", "package.json");
-        if (await fileExists(subPkgJson) || await fileExists(subCorePkgJson)) {
-          console.log(`[package-finder] Found swiss-lib via subdir scan at: ${subSwissLib}`);
-          return subSwissLib;
+      for (const entry of entries) {
+        if (entry.name === repoName && (entry.isDirectory() || entry.isSymbolicLink())) {
+          const subDir = path.join(current, entry.name);
+          if (await fileExists(path.join(subDir, "package.json"))) {
+            return subDir;
+          }
         }
       }
-    } catch {
-      // Skip on permission errors
-    }
+    } catch { /* Continue */ }
 
     const parent = path.dirname(current);
     if (parent === current) break;
     current = parent;
   }
-
   return null;
 }
 
 /**
- * Find a specific package by name, searching in:
- * 1. node_modules (local and workspace)
- * 2. swiss-lib/packages (if found)
- * 3. workspace packages (lib/, packages/, modules/)
+ * Find a specific package by name, with priority given based on environment.
+ * In development, we prioritize local sibling source code.
  */
 export async function findPackage(
   packageName: string,
   startPath: string,
   workspaceRoot?: string | null
 ): Promise<PackageLocation | null> {
-  // 1. Check local node_modules
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  // 1. In Development: Prioritize @kibologic/* local siblings
+  if (isDev && packageName.startsWith("@kibologic/")) {
+    const unscoped = packageName.replace("@kibologic/", "");
+    
+    // We search across all potential sibling repository names
+    const potentialRepos = ['swiss-lib', 'alpine-shell', 'swite', 'sws-infra', 'swiss-packages'];
+    for (const repo of potentialRepos) {
+      const siblingPath = await findSiblingRepository(startPath, repo);
+      if (siblingPath) {
+        const packagePath = path.join(siblingPath, "packages", unscoped);
+        if (await fileExists(path.join(packagePath, "package.json"))) {
+          console.log(`[package-finder] Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
+          return { path: packagePath, type: 'swiss-lib' }; // Labeled as 'swiss-lib' for local resolution compatibility
+        }
+      }
+    }
+  }
+
+  // 2. Check local node_modules (Standard resolution)
   const localNodeModules = path.join(startPath, "node_modules", packageName);
   if (await fileExists(path.join(localNodeModules, "package.json"))) {
     return { path: localNodeModules, type: 'node_modules' };
   }
   
-  // 2. Check workspace root node_modules
+  // 3. Check workspace root node_modules
   if (workspaceRoot) {
     const workspaceNodeModules = path.join(workspaceRoot, "node_modules", packageName);
     if (await fileExists(path.join(workspaceNodeModules, "package.json"))) {
@@ -105,36 +92,17 @@ export async function findPackage(
     }
   }
   
-  // 3. Check swiss-lib monorepo (for @kibologic/* packages)
-  if (packageName.startsWith("@kibologic/")) {
-    const swissLib = await findSwissLibMonorepo(startPath);
-    if (swissLib) {
-      const packageDir = packageName.replace("@kibologic/", "");
-      const swissPackage = path.join(swissLib, "packages", packageDir);
-      if (await fileExists(path.join(swissPackage, "package.json"))) {
-        return { path: swissPackage, type: 'swiss-lib' };
-      }
-    }
-  }
-  
-  // 4. Check workspace packages (lib/, packages/, modules/)
+  // 4. Fallback search in internal workspace packages (lib/, packages/, modules/)
   if (workspaceRoot) {
     const packageDirs = ["lib", "packages", "modules", "libraries", "apps"];
     for (const dir of packageDirs) {
       const searchDir = path.join(workspaceRoot, dir);
       if (!(await fileExists(searchDir))) continue;
       
-      // Try scoped package name
-      if (packageName.startsWith("@")) {
-        const unscoped = packageName.split("/")[1];
-        const packagePath = path.join(searchDir, unscoped);
-        if (await fileExists(path.join(packagePath, "package.json"))) {
-          return { path: packagePath, type: 'workspace' };
-        }
-      }
-      
-      // Try full package name
-      const packagePath = path.join(searchDir, packageName);
+      const parts = packageName.split("/");
+      const unscoped = parts.length > 1 ? parts[1] : parts[0];
+      const packagePath = path.join(searchDir, unscoped);
+
       if (await fileExists(path.join(packagePath, "package.json"))) {
         return { path: packagePath, type: 'workspace' };
       }
