@@ -22,29 +22,48 @@ export async function resolveFilePath(
   root: string,
   workspaceRoot: string | null = null,
 ): Promise<string> {
-  // /node_modules/ URLs: resolve from app root first (pnpm symlinks live in app node_modules)
+  // /node_modules/ URLs: walk up from app root until we find the package.
+  // pnpm may place deps at the app root, one level up (workspace pkg), or at
+  // the monorepo root depending on hoisting config and pnpm version.
   if (url.startsWith("/node_modules/")) {
     const urlPath = url.startsWith("/") ? url.slice(1) : url;
-    const appPath = path.join(root, urlPath);
-    try {
-      const resolved = await fs.realpath(appPath);
-      await fs.access(resolved);
-      return resolved;
-    } catch {
-      // Try workspace root (hoisted packages)
-      const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
-      if (wsRoot) {
-        const wsPath = path.join(wsRoot, urlPath);
+
+    // Walk up the directory tree from root, trying node_modules at each level
+    let current = path.resolve(root);
+    const visited = new Set<string>();
+    for (let i = 0; i < 8; i++) {
+      const candidate = path.join(current, urlPath);
+      if (!visited.has(candidate)) {
+        visited.add(candidate);
+        try {
+          const resolved = await fs.realpath(candidate);
+          await fs.access(resolved);
+          return resolved;
+        } catch {
+          // try parent level
+        }
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break; // filesystem root
+      current = parent;
+    }
+
+    // Explicit workspace root (covers hoisted-to-root installs)
+    const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
+    if (wsRoot) {
+      const wsPath = path.join(wsRoot, urlPath);
+      if (!visited.has(wsPath)) {
         try {
           const resolved = await fs.realpath(wsPath);
           await fs.access(resolved);
           return resolved;
         } catch {
-          // Return app path; handler will 404 if missing
+          // not found there either
         }
       }
     }
-    return appPath;
+
+    return path.join(path.resolve(root), urlPath); // fallback; handler will 404
   }
 
   // Check if this is a swiss-lib package file

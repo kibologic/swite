@@ -8,13 +8,13 @@ importers:
 
   .:
     dependencies:
-      '@swissjs/compiler':
+      '@kibologic/compiler':
         specifier: link:../swiss-lib/packages/compiler
         version: link:../swiss-lib/packages/compiler
-      '@swissjs/core':
+      '@kibologic/core':
         specifier: link:../swiss-lib/packages/core
         version: link:../swiss-lib/packages/core
-      '@swissjs/plugin-file-router':
+      '@kibologic/plugin-file-router':
         specifier: link:../swiss-lib/packages/plugins/file-router
         version: link:../swiss-lib/packages/plugins/file-router
       chalk:

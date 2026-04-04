@@ -666,30 +666,50 @@ export async function setupSPAFallback(
       console.log(chalk.yellow(`[SWITE CSS] Could not extract CSS imports: ${error instanceof Error ? error.message : String(error)}`));
     }
 
-    // Add import map to help browser resolve bare module specifiers
-    if (!html.includes('type="importmap"')) {
-      let importsObj: Record<string, string> = {};
-      const cachedMapPath = path.join(config.root, ".swite", "import-map.json");
-      try {
-        const raw = await fs.readFile(cachedMapPath, "utf-8");
-        const parsed = JSON.parse(raw);
-        if (parsed?.imports && typeof parsed.imports === "object") {
-          importsObj = parsed.imports;
-          console.log(`[SWITE] Loaded import map from cache: ${Object.keys(importsObj).length} entries`);
-        }
-      } catch {
-        console.log("[SWITE] No cached import map found, using empty importmap");
+    // Add/merge import map to help browser resolve bare module specifiers.
+    // If an importmap already exists in HTML, merge .swite/import-map.json entries
+    // into it — existing HTML entries take priority (never overwrite manual entries).
+    const cachedMapPath = path.join(config.root, ".swite", "import-map.json");
+    let switeImports: Record<string, string> = {};
+    try {
+      const raw = await fs.readFile(cachedMapPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed?.imports && typeof parsed.imports === "object") {
+        switeImports = parsed.imports;
       }
-      const importMap = `\n    <script type="importmap">\n    ${JSON.stringify({ imports: importsObj }, null, 2).replace(/\n/g, "\n    ")}\n    </script>`;
+    } catch {
+      // no cached map — nothing to merge
+    }
+
+    if (!html.includes('type="importmap"')) {
+      // No importmap at all — inject one from .swite/import-map.json
+      const importMap = `\n    <script type="importmap">\n    ${JSON.stringify({ imports: switeImports }, null, 2).replace(/\n/g, "\n    ")}\n    </script>`;
       const beforeReplace = html;
       html = html.replace(/\s*<\/head>/i, `${importMap}\n  </head>`);
       if (html === beforeReplace) {
         console.warn("[SWITE] Failed to add import map - </head> not found or already replaced");
       } else {
-        console.log("[SWITE] Added import map for @kibologic/core");
+        console.log(`[SWITE] Added import map with ${Object.keys(switeImports).length} entries`);
       }
     } else {
-      console.log("[SWITE] Import map already exists in HTML");
+      // Importmap already in HTML — merge swite entries without overwriting existing ones
+      console.log("[SWITE] Import map already exists in HTML — merging swite entries");
+      if (Object.keys(switeImports).length > 0) {
+        html = html.replace(
+          /(<script\s+type=["']importmap["'][^>]*>)\s*([\s\S]*?)(\s*<\/script>)/i,
+          (_match, open, body, close) => {
+            try {
+              const existing = JSON.parse(body.trim());
+              const existingImports: Record<string, string> = existing?.imports ?? {};
+              // Swite entries fill gaps; existing HTML entries win
+              const merged = { ...switeImports, ...existingImports };
+              return `${open}\n    ${JSON.stringify({ imports: merged }, null, 2).replace(/\n/g, "\n    ")}${close}`;
+            } catch {
+              return _match; // parse failed — leave importmap untouched
+            }
+          }
+        );
+      }
     }
 
     res.send(html);

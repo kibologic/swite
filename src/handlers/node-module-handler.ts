@@ -49,26 +49,33 @@ export class NodeModuleHandler extends BaseHandler {
         chalk.blue(`[node_modules] Workspace root: ${workspaceRoot || "none"}`),
       );
 
-      // Try app root node_modules first
-      const appNodeModulesPath = path.join(this.context.root, urlPath);
-      console.log(
-        chalk.blue(`[node_modules] Trying app path: ${appNodeModulesPath}`),
-      );
-      try {
-        // Try to resolve symlinks first (realpath works even if path is a symlink)
-        // If realpath fails, the path doesn't exist
-        const resolvedPath = await fs.realpath(appNodeModulesPath);
-        console.log(chalk.blue(`[node_modules] Resolved to: ${resolvedPath}`));
-        // Verify the resolved path exists
-        await fs.access(resolvedPath);
-        filePath = resolvedPath;
-        console.log(chalk.green(`[node_modules] ✓ Found in app: ${urlPath}`));
-      } catch (err) {
-        console.log(
-          chalk.yellow(
-            `[node_modules] App path failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-        );
+      // Walk up directory tree from app root to find node_modules at any level
+      // (handles pnpm isolated AND hoisted workspace layouts)
+      {
+        let current = path.resolve(this.context.root);
+        const visited = new Set<string>();
+        for (let i = 0; i < 8; i++) {
+          const candidate = path.join(current, urlPath);
+          if (!visited.has(candidate)) {
+            visited.add(candidate);
+            console.log(chalk.blue(`[node_modules] Trying path: ${candidate}`));
+            try {
+              const resolvedPath = await fs.realpath(candidate);
+              console.log(chalk.blue(`[node_modules] Resolved to: ${resolvedPath}`));
+              await fs.access(resolvedPath);
+              filePath = resolvedPath;
+              console.log(chalk.green(`[node_modules] ✓ Found: ${urlPath}`));
+              break;
+            } catch (err) {
+              console.log(chalk.yellow(`[node_modules] Path failed: ${err instanceof Error ? err.message : String(err)}`));
+            }
+          }
+          const parent = path.dirname(current);
+          if (parent === current) break;
+          current = parent;
+        }
+      }
+      if (!filePath) {
         // Try workspace root node_modules
         if (workspaceRoot) {
           const workspaceNodeModulesPath = path.join(workspaceRoot, urlPath);
