@@ -7,11 +7,13 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { findSwissLibMonorepo } from "../utils/package-finder.js";
 import { lookupInSymlinkRegistry } from "./symlink-registry.js";
+import type { SwiteUserConfig } from "../config.js";
 
 export interface UrlResolverContext {
   root: string;
   getWorkspaceRoot: () => Promise<string | null>;
   fileExists: (filePath: string) => Promise<boolean>;
+  userConfig?: SwiteUserConfig;
 }
 
 export type WorkspacePackageResolverContext = UrlResolverContext;
@@ -118,7 +120,7 @@ export async function toUrl(
         console.log(`[SWITE] toUrl: Checking for source file: ${srcPath}`);
         const { resolveFilePath } = await import("../utils/file-path-resolver.js");
         const workspaceRoot = await context.getWorkspaceRoot();
-        const srcFilePath = await resolveFilePath(srcPath, context.root, workspaceRoot);
+        const srcFilePath = await resolveFilePath(srcPath, context.root, workspaceRoot, context.userConfig);
         console.log(`[SWITE] toUrl: Resolved source file path: ${srcFilePath}, exists: ${await context.fileExists(srcFilePath)}`);
         if (await context.fileExists(srcFilePath)) {
           console.log(`[SWITE] toUrl: Preferring source over dist: ${srcPath}`);
@@ -136,7 +138,7 @@ export async function toUrl(
       console.log(`[SWITE] toUrl: Checking for source file: ${srcPath}`);
       const { resolveFilePath } = await import("../utils/file-path-resolver.js");
       const workspaceRoot = await context.getWorkspaceRoot();
-      const srcFilePath = await resolveFilePath(srcPath, context.root, workspaceRoot);
+      const srcFilePath = await resolveFilePath(srcPath, context.root, workspaceRoot, context.userConfig);
       console.log(`[SWITE] toUrl: Resolved source file path: ${srcFilePath}, exists: ${await context.fileExists(srcFilePath)}`);
       if (await context.fileExists(srcFilePath)) {
         console.log(`[SWITE] toUrl: Preferring source over dist: ${srcPath}`);

@@ -1,5 +1,5 @@
 /*
- * Bare Import Resolver - Resolves bare module specifiers (@kibologic/core, etc.)
+ * Bare Import Resolver - Resolves bare module specifiers (e.g. @kibologic/core, react, etc.)
  * Extracted from resolver.ts for modularity
  */
 
@@ -16,7 +16,7 @@ export interface BareImportResolverContext extends UrlResolverContext {
 }
 
 /**
- * Resolve bare import specifier (e.g., @kibologic/core, react, etc.)
+ * Resolve bare import specifier (e.g., @my-scope/core, react, etc.)
  */
 export async function resolveBareImport(
   specifier: string,
@@ -24,7 +24,7 @@ export async function resolveBareImport(
 ): Promise<string> {
   console.log(`[SWITE] resolveBareImport CALLED: ${specifier}`);
   try {
-    // Handle scoped packages (@kibologic/core) and regular packages
+    // Handle scoped packages (@my-scope/core) and regular packages
     const parts = specifier.split("/");
     const isScoped = specifier.startsWith("@");
     const pkgName = isScoped ? `${parts[0]}/${parts[1]}` : parts[0];
@@ -51,13 +51,13 @@ export async function resolveBareImport(
       nodeModulesLocations.push(path.join(workspaceRoot, "node_modules"));
     }
 
-    // Add swiss-lib monorepo node_modules
+    // Add monorepo node_modules if present
     const swissLib = await findSwissLibMonorepo(context.root);
     if (swissLib) {
-      const swissNodeModules = path.join(swissLib, "node_modules");
-      if (await context.fileExists(swissNodeModules)) {
-        nodeModulesLocations.push(swissNodeModules);
-        console.log(`[SWITE] Added swiss-lib monorepo node_modules for ${pkgName}`);
+      const monorepoNodeModules = path.join(swissLib, "node_modules");
+      if (await context.fileExists(monorepoNodeModules)) {
+        nodeModulesLocations.push(monorepoNodeModules);
+        console.log(`[SWITE] Added monorepo node_modules for ${pkgName}`);
       }
     }
 

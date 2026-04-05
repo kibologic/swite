@@ -8,11 +8,13 @@ import type { Response } from "express";
 import { promises as fs } from "node:fs";
 import { ModuleResolver } from "../resolver.js";
 import { resolveFilePath } from "../utils/file-path-resolver.js";
+import type { SwiteUserConfig } from "../config.js";
 
 export interface HandlerContext {
   resolver: ModuleResolver;
   root: string;
   workspaceRoot: string | null;
+  userConfig?: SwiteUserConfig;
 }
 
 /**
@@ -33,7 +35,7 @@ export class BaseHandler {
   constructor(protected context: HandlerContext) {}
 
   protected async resolveFilePath(url: string): Promise<string> {
-    return resolveFilePath(url, this.context.root, this.context.workspaceRoot);
+    return resolveFilePath(url, this.context.root, this.context.workspaceRoot, this.context.userConfig);
   }
 
   protected async fileExists(filePath: string): Promise<boolean> {

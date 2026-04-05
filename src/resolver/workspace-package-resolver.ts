@@ -11,6 +11,7 @@ export interface WorkspacePackageResolverContext {
   root: string;
   getWorkspaceRoot: () => Promise<string | null>;
   fileExists: (filePath: string) => Promise<boolean>;
+  userConfig?: any; // SwiteUserConfig
 }
 
 /**
@@ -23,13 +24,11 @@ export async function resolveWorkspacePackage(
   let workspaceRoot: string | null = null;
   const workspaceRoots: string[] = [];
 
-  if (
-    pkgName.startsWith("@swiss-enterprise/") ||
-    pkgName.startsWith("@swiss-module/") ||
-    pkgName.startsWith("@kibologic/") ||
-    pkgName.startsWith("@swiss-framework/")
-  ) {
-    console.log(`[SWITE] Looking for SWS root for @swiss-enterprise package...`);
+  const internalScopes = context.userConfig?.internalScopes || [];
+  const isInternal = internalScopes.some(scope => pkgName === scope || pkgName.startsWith(scope + "/"));
+
+  if (isInternal) {
+    console.log(`[SWITE] Looking for monorepo root for internal scope package ${pkgName}...`);
     console.log(`[SWITE] Starting from app root: ${context.root}`);
 
     const fallbackPaths = [
@@ -110,11 +109,11 @@ export async function resolveWorkspacePackage(
     }
   }
 
-  // For @kibologic/* packages, also check swiss-lib monorepo
-  if (pkgName.startsWith("@kibologic/")) {
+  // For internal packages, also check monorepo siblings
+  if (isInternal) {
     const swissLib = await findSwissLibMonorepo(context.root);
     if (swissLib) {
-      console.log(`[SWITE] Found swiss-lib monorepo at ${swissLib}`);
+      console.log(`[SWITE] Found monorepo at ${swissLib}`);
       workspaceRoots.unshift(swissLib);
     }
   }
@@ -136,23 +135,23 @@ export async function resolveWorkspacePackage(
   
   const additionalRoots: string[] = workspaceRoots.slice(1);
   
-  // Add swiss-lib monorepo if it exists (for @kibologic/* packages)
-  if (pkgName.startsWith("@kibologic/")) {
+  // Add monorepos if they exist (for internal packages)
+  if (isInternal) {
     try {
       const swissLib = await findSwissLibMonorepo(context.root);
       if (swissLib && !additionalRoots.includes(swissLib) && swissLib !== primaryRoot) {
-        additionalRoots.unshift(swissLib); // Prioritize swiss-lib
+        additionalRoots.unshift(swissLib); // Prioritize local monorepo
       }
-      // Also add swiss-lib/packages to ensure packages are found
+      // Also add packages/ subdirectories to ensure packages are found
       if (swissLib) {
         const swissLibPackages = path.join(swissLib, "packages");
         if (await context.fileExists(swissLibPackages) && !additionalRoots.includes(swissLibPackages)) {
-          console.log(`[SWITE] Adding swiss-lib/packages to scan roots: ${swissLibPackages}`);
+          console.log(`[SWITE] Adding monorepo packages to scan roots: ${swissLibPackages}`);
           additionalRoots.unshift(swissLibPackages);
         }
       }
     } catch (error: any) {
-      console.warn(`[SWITE] Error finding swiss-lib monorepo:`, error.message);
+      console.warn(`[SWITE] Error finding monorepo:`, error.message);
     }
   }
   
@@ -165,21 +164,21 @@ export async function resolveWorkspacePackage(
       console.error(`[SWITE] Error scanning package registry:`, error.message);
       console.error(`[SWITE] Stack:`, error.stack);
     }
-  } else if (registry.getPackageCount() && pkgName.startsWith("@kibologic/")) {
-    // Registry already scanned but may not have swiss-lib/packages
-    // Check if @kibologic/core is missing from registry
+  } else if (registry.getPackageCount() && isInternal) {
+    // Registry already scanned but may not have monorepo packages
+    // Check if package is missing from registry
     const existingPkg = registry.findPackage(pkgName);
     if (!existingPkg) {
-      console.log(`[SWITE] ${pkgName} not in registry, forcing rescan with swiss-lib/packages...`);
+      console.log(`[SWITE] ${pkgName} not in registry, forcing rescan with monorepo packages...`);
       await registry.rescan();
-      // After rescan, if still not found, explicitly scan swiss-lib/packages
+      // After rescan, if still not found, explicitly scan monorepo packages
       const stillMissing = !registry.findPackage(pkgName);
       if (stillMissing) {
         const swissLib = await findSwissLibMonorepo(context.root);
         if (swissLib) {
           const swissLibPackages = path.join(swissLib, "packages");
           if (await context.fileExists(swissLibPackages)) {
-            console.log(`[SWITE] Explicitly scanning swiss-lib/packages: ${swissLibPackages}`);
+            console.log(`[SWITE] Explicitly scanning monorepo packages: ${swissLibPackages}`);
             await registry.scanWorkspace(swissLibPackages, []);
           }
         }

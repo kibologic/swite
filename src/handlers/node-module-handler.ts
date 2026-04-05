@@ -297,9 +297,12 @@ export class NodeModuleHandler extends BaseHandler {
 
     if (!pkgName || pkgName === "." || pkgName === "..") return null;
 
-    // BLACKLIST: Never redirect private @kibologic scope packages to public CDNs
-    if (pkgName.startsWith("@kibologic/")) {
-      console.log(chalk.red(`[node_modules] CDN Blocked: Private scope ${pkgName} cannot be served from jsDelivr.`));
+    // BLACKLIST: Never redirect "internal" or "private" scoped packages to public CDNs
+    const internalScopes = this.context.userConfig?.internalScopes || [];
+    const isInternal = internalScopes.some(scope => pkgName === scope || pkgName.startsWith(scope + "/"));
+
+    if (isInternal) {
+      console.log(chalk.red(`[node_modules] CDN Blocked: Internal scope package ${pkgName} cannot be served from jsDelivr.`));
       return null;
     }
 

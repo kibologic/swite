@@ -12,6 +12,7 @@ import { findSwissLibMonorepo, findPackage, findSiblingRepository } from "./pack
 export interface PathResolverContext {
   root: string;
   workspaceRoot: string | null;
+  userConfig?: any; // SwiteUserConfig
 }
 
 /**
@@ -21,6 +22,7 @@ export async function resolveFilePath(
   url: string,
   root: string,
   workspaceRoot: string | null = null,
+  userConfig?: any
 ): Promise<string> {
   // Consolidate workspace root discovery for consistency across resolution blocks
   const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
@@ -33,12 +35,16 @@ export async function resolveFilePath(
     const parts = urlPath.split("/");
     // Handle @scoped/package or standard-package
     const packageName = parts[1].startsWith("@") ? `${parts[1]}/${parts[2]}` : parts[1];
-      // NEW: PNPM-aware Interceptor. Check if this request is for a @kibologic scope package.
+      // NEW: PNPM-aware Interceptor. Check if this request is for an "internal" scope package.
       // In development, we always prioritize local siblings if they exist.
-      const kibologicMatch = url.match(/@kibologic\/([^/]+)/);
-      if (process.env.NODE_ENV !== 'production' && kibologicMatch) {
-        const packageName = `@kibologic/${kibologicMatch[1]}`;
-        const remainingPath = url.split(kibologicMatch[0])[1];
+      const internalScopes = userConfig?.internalScopes || [];
+      const match = internalScopes.length > 0 
+        ? url.match(new RegExp(`(${internalScopes.join("|")})\/([^/]+)`))
+        : null;
+
+      if (process.env.NODE_ENV !== 'production' && match) {
+        const packageName = match[0];
+        const remainingPath = url.split(match[0])[1];
 
         const localLoc = await findPackage(packageName, root, wsRoot);
         if (localLoc && localLoc.type !== 'node_modules') {
@@ -97,32 +103,32 @@ export async function resolveFilePath(
     return path.join(path.resolve(root), urlPath); // fallback; handler will 404
   }
 
-  // Check if this is a swiss-lib package file
+  // Check if this is a monorepo package file
   if (url.startsWith("/swiss-packages/")) {
-    // Dynamically find swiss-lib monorepo instead of hardcoded paths
-    const swissLib = await findSwissLibMonorepo(root);
-    if (swissLib) {
+    // Dynamically find monorepo instead of hardcoded paths
+    const monorepoRoot = await findSwissLibMonorepo(root);
+    if (monorepoRoot) {
       // Remove /swiss-packages prefix and use the rest as relative path
       const relativePath = url.replace(/^\/swiss-packages\//, "");
-      const swissPackagesPath = path.join(swissLib, "packages");
+      const swissPackagesPath = path.join(monorepoRoot, "packages");
       const fullPath = path.join(swissPackagesPath, relativePath);
       
       try {
         await fs.access(fullPath);
-        console.log(`[file-path-resolver] Found swiss-lib package at: ${fullPath}`);
+        console.log(`[file-path-resolver] Found monorepo package at: ${fullPath}`);
         return fullPath;
       } catch {
         console.warn(
-          `[file-path-resolver] swiss-lib package file not found: ${fullPath}`,
+          `[file-path-resolver] monorepo package file not found: ${fullPath}`,
         );
         return fullPath; // Return path anyway, will error later if needed
       }
     } else {
       // Fallback: construct path from root (may not work, but better than nothing)
       const relativePath = url.replace(/^\/swiss-packages\//, "");
-      const fallbackPath = path.join(root, "..", "..", "..", "swiss-lib", "packages", relativePath);
+      const fallbackPath = path.join(root, "..", "..", "..", "monorepo-source", "packages", relativePath);
       console.warn(
-        `[file-path-resolver] swiss-lib not found, using fallback: ${fallbackPath}`,
+        `[file-path-resolver] monorepo not found, using fallback: ${fallbackPath}`,
       );
       return fallbackPath;
     }
