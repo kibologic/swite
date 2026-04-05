@@ -67,7 +67,21 @@ export async function findPackage(
 ): Promise<PackageLocation | null> {
   const isDev = process.env.NODE_ENV !== 'production';
 
-  // 1. In Development: Prioritize @kibologic/* local siblings
+  // 1. Check local node_modules (Standard resolution) - HIGHEST PRIORITY in Remote-First
+  const localNodeModules = path.join(startPath, "node_modules", packageName);
+  if (await fileExists(path.join(localNodeModules, "package.json"))) {
+    return { path: localNodeModules, type: 'node_modules' };
+  }
+  
+  // 2. Check workspace root node_modules
+  if (workspaceRoot) {
+    const workspaceNodeModules = path.join(workspaceRoot, "node_modules", packageName);
+    if (await fileExists(path.join(workspaceNodeModules, "package.json"))) {
+      return { path: workspaceNodeModules, type: 'node_modules' };
+    }
+  }
+
+  // 3. In Development: Local sibling fallback ONLY IF NOT IN node_modules
   if (isDev && packageName.startsWith("@kibologic/")) {
     const unscoped = packageName.replace("@kibologic/", "");
     
@@ -82,20 +96,6 @@ export async function findPackage(
           return { path: packagePath, type: 'swiss-lib' }; // Labeled as 'swiss-lib' for local resolution compatibility
         }
       }
-    }
-  }
-
-  // 2. Check local node_modules (Standard resolution)
-  const localNodeModules = path.join(startPath, "node_modules", packageName);
-  if (await fileExists(path.join(localNodeModules, "package.json"))) {
-    return { path: localNodeModules, type: 'node_modules' };
-  }
-  
-  // 3. Check workspace root node_modules
-  if (workspaceRoot) {
-    const workspaceNodeModules = path.join(workspaceRoot, "node_modules", packageName);
-    if (await fileExists(path.join(workspaceNodeModules, "package.json"))) {
-      return { path: workspaceNodeModules, type: 'node_modules' };
     }
   }
   
