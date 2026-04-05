@@ -28,12 +28,14 @@ import {
 import { HMREngine } from "../hmr.js";
 import { findWorkspaceRoot } from "../utils/workspace.js";
 import { loadImportMap } from "../utils/generate-import-map.js";
+import type { SwiteUserConfig } from "../config.js";
 
 export interface MiddlewareConfig {
   root: string;
   publicDir: string;
   resolver: ModuleResolver;
   hmr: HMREngine;
+  userConfig?: SwiteUserConfig;
 }
 
 export interface MiddlewareResult {
@@ -135,6 +137,7 @@ export async function setupMiddleware(
     resolver: config.resolver,
     root: config.root,
     workspaceRoot,
+    userConfig: config.userConfig,
   };
 
   const uiHandler = new UIHandler(handlerContext);
