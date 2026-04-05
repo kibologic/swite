@@ -78,41 +78,6 @@ export async function resolveBareImport(
         `[SWITE] Package ${pkgName} not in node_modules, checking workspace...`,
       );
 
-      // EMERGENCY FIX: For @kibologic/* packages, try direct path first
-      if (pkgName.startsWith('@kibologic/')) {
-        const pkgShortName = pkgName.replace('@kibologic/', '');
-
-        // Try relative path from SWS to swiss-lib
-        const potentialPaths = [
-          path.join(context.root, '../swiss-lib/packages', pkgShortName),
-          path.join(context.root, '../../swiss-lib/packages', pkgShortName),
-          path.join(context.root, '../../../swiss-lib/packages', pkgShortName),
-        ];
-
-        // Also check node_modules specifically for the @kibologic package source entry point
-        // This supports the 'Remote-First' workflow when exports/main are brittle
-        for (const nmBase of nodeModulesLocations) {
-          potentialPaths.push(path.join(nmBase, pkgName));
-        }
-
-        for (const candidatePath of potentialPaths) {
-          const candidatePkgJson = path.join(candidatePath, 'package.json');
-          if (await context.fileExists(candidatePkgJson)) {
-            // Check for Swiss entry points if it's a @kibologic module
-            const srcIndex = path.join(candidatePath, 'src/index.ui');
-            if (await context.fileExists(srcIndex)) {
-              console.log(`[SWITE] Emergency: Found @kibologic source entry at ${srcIndex}`);
-              return await toUrl(srcIndex, context);
-            }
-
-            console.log(`[SWITE] Emergency: Found ${pkgName} at ${candidatePath}`);
-            pkgDir = candidatePath;
-            pkgJsonPath = candidatePkgJson;
-            break;
-          }
-        }
-      }
-
       // If still not found, try workspace resolver
       if (!pkgJsonPath || !pkgDir) {
         const workspacePkg = await context.resolveWorkspacePackage(pkgName);

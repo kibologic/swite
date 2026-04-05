@@ -18,7 +18,7 @@ export interface PackageLocation {
 }
 
 /**
- * Find any Kibologic sibling monorepo (e.g. swiss-lib, alpine-shell) by searching for its package.json
+ * Find any sibling monorepo by searching for its package.json
  */
 export async function findSiblingRepository(startPath: string, repoName: string): Promise<string | null> {
   let current = startPath;
@@ -82,20 +82,30 @@ export async function findPackage(
   }
 
   // 3. In Development: Local sibling fallback ONLY IF NOT IN node_modules
-  if (isDev && packageName.startsWith("@kibologic/")) {
-    const unscoped = packageName.replace("@kibologic/", "");
+  if (isDev && packageName.includes("/")) {
+    const parts = packageName.split("/");
+    const unscoped = parts[parts.length - 1];
     
-    // We search across all potential sibling repository names
-    const potentialRepos = ['swiss-lib', 'alpine-shell', 'swite', 'sws-infra', 'swiss-packages'];
-    for (const repo of potentialRepos) {
-      const siblingPath = await findSiblingRepository(startPath, repo);
-      if (siblingPath) {
-        const packagePath = path.join(siblingPath, "packages", unscoped);
-        if (await fileExists(path.join(packagePath, "package.json"))) {
-          console.log(`[package-finder] Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
-          return { path: packagePath, type: 'swiss-lib' }; // Labeled as 'swiss-lib' for local resolution compatibility
+    // We search across all potential sibling repository names by looking at the parent tree
+    // for directories that might contain Swiss packages.
+    const parentDirs = [
+      path.join(startPath, ".."),
+      path.join(startPath, "../.."),
+      path.join(startPath, "../../.."),
+    ];
+
+    for (const parent of parentDirs) {
+      try {
+        const potentialRepos = await fs.readdir(parent);
+        for (const repo of potentialRepos) {
+          const siblingPath = path.join(parent, repo);
+          const packagePath = path.join(siblingPath, "packages", unscoped);
+          if (await fileExists(path.join(packagePath, "package.json"))) {
+            console.log(`[package-finder] Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
+            return { path: packagePath, type: 'swiss-lib' };
+          }
         }
-      }
+      } catch { /* Continue */ }
     }
   }
   
