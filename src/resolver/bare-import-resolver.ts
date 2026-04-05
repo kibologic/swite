@@ -89,9 +89,22 @@ export async function resolveBareImport(
           path.join(context.root, '../../../swiss-lib/packages', pkgShortName),
         ];
 
+        // Also check node_modules specifically for the @kibologic package source entry point
+        // This supports the 'Remote-First' workflow when exports/main are brittle
+        for (const nmBase of nodeModulesLocations) {
+          potentialPaths.push(path.join(nmBase, pkgName));
+        }
+
         for (const candidatePath of potentialPaths) {
           const candidatePkgJson = path.join(candidatePath, 'package.json');
           if (await context.fileExists(candidatePkgJson)) {
+            // Check for Swiss entry points if it's a @kibologic module
+            const srcIndex = path.join(candidatePath, 'src/index.ui');
+            if (await context.fileExists(srcIndex)) {
+              console.log(`[SWITE] Emergency: Found @kibologic source entry at ${srcIndex}`);
+              return await toUrl(srcIndex, context);
+            }
+
             console.log(`[SWITE] Emergency: Found ${pkgName} at ${candidatePath}`);
             pkgDir = candidatePath;
             pkgJsonPath = candidatePkgJson;
@@ -249,9 +262,19 @@ export async function resolveBareImport(
 
     const fullPath = path.join(pkgDir, entryPoint);
 
-    // Try the exact path first
-    if (await context.fileExists(fullPath)) {
-      return await toUrl(fullPath, context);
+    // Try a few Swiss-specific variations of the entry point before CDN fallback
+    const swissVariations = [
+      fullPath,
+      fullPath.replace(/\.(js|mjs|ts)$/, '.ui'),
+      fullPath.replace(/\.(js|mjs|ts)$/, '.uix'),
+      path.join(pkgDir, 'src/index.ui'),
+      path.join(pkgDir, 'src/index.uix'),
+    ];
+
+    for (const v of swissVariations) {
+      if (await context.fileExists(v)) {
+        return await toUrl(v, context);
+      }
     }
 
     // Try with extensions

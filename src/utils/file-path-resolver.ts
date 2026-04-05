@@ -33,32 +33,35 @@ export async function resolveFilePath(
     const parts = urlPath.split("/");
     // Handle @scoped/package or standard-package
     const packageName = parts[1].startsWith("@") ? `${parts[1]}/${parts[2]}` : parts[1];
-    const remainingPath = parts[1].startsWith("@") ? parts.slice(3).join("/") : parts.slice(2).join("/");
+      // NEW: PNPM-aware Interceptor. Check if this request is for a @kibologic scope package.
+      // In development, we always prioritize local siblings if they exist.
+      const kibologicMatch = url.match(/@kibologic\/([^/]+)/);
+      if (process.env.NODE_ENV !== 'production' && kibologicMatch) {
+        const packageName = `@kibologic/${kibologicMatch[1]}`;
+        const remainingPath = url.split(kibologicMatch[0])[1];
 
-    // INTERCEPTOR: In development, attempt to resolve @kibologic packages from local siblings
-    if (process.env.NODE_ENV !== 'production' && packageName.startsWith("@kibologic/")) {
-      const localLoc = await findPackage(packageName, root, wsRoot);
-      if (localLoc && localLoc.type !== 'node_modules') {
-        // Found local source! Redirect the base path
-        const fullPath = path.join(localLoc.path, remainingPath);
-        
-        // Re-use workspace fallback logic for dist -> src transition
-        if (fullPath.includes("/dist/")) {
-          const srcPath = fullPath.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
-          try {
-            await fs.access(srcPath);
-            console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local src: ${srcPath}`);
-            return srcPath;
-          } catch { /* Fallback to dist if src not found */ }
+        const localLoc = await findPackage(packageName, root, wsRoot);
+        if (localLoc && localLoc.type !== 'node_modules') {
+          // Found local source! Redirect the base path
+          const fullPath = path.join(localLoc.path, remainingPath);
+          
+          // Re-use workspace fallback logic for dist -> src transition
+          if (fullPath.includes("/dist/")) {
+            const srcPath = fullPath.replace("/dist/", "/src/").replace(/\.[mc]?js$/, ".ts");
+            try {
+              await fs.access(srcPath);
+              console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local src: ${srcPath}`);
+              return srcPath;
+            } catch { /* Fallback to dist if src not found */ }
+          }
+          
+          console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local source: ${fullPath}`);
+          return fullPath;
         }
-        
-        console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local source: ${fullPath}`);
-        return fullPath;
       }
-    }
 
-    // Walk up the directory tree from root, trying node_modules at each level
-    let current = path.resolve(root);
+      // Walk up the directory tree from root, trying node_modules at each level
+      let current = path.resolve(root);
     const visited = new Set<string>();
     for (let i = 0; i < 8; i++) {
       const candidate = path.join(current, urlPath);
@@ -78,7 +81,6 @@ export async function resolveFilePath(
     }
 
     // Explicit workspace root (covers hoisted-to-root installs)
-    const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
     if (wsRoot) {
       const wsPath = path.join(wsRoot, urlPath);
       if (!visited.has(wsPath)) {
