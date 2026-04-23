@@ -115,8 +115,11 @@ export async function setupStaticFiles(
         }
         
         // Try app node_modules first, then workspace
-        const appPath = path.join(config.root, "node_modules", req.path);
-        const workspacePath = path.join(workspaceNodeModules, req.path);
+        // req.path starts with '/', and path.join treats an absolute segment as a reset.
+        // Strip leading slashes so we actually check inside the intended node_modules roots.
+        const relPath = req.path.replace(/^\/+/, "");
+        const appPath = path.join(config.root, "node_modules", relPath);
+        const workspacePath = path.join(workspaceNodeModules, relPath);
 
         // Check if file exists in app node_modules first
         fs.access(appPath)
