@@ -31,6 +31,7 @@ import { loadImportMap } from "../utils/generate-import-map.js";
 
 export interface MiddlewareConfig {
   root: string;
+  workspaceRoot?: string | null;
   publicDir: string;
   resolver: ModuleResolver;
   hmr: HMREngine;
@@ -672,6 +673,7 @@ export async function setupMiddleware(
   await setupStaticFiles(app, {
     root: config.root,
     publicDir: config.publicDir,
+    workspaceRoot: config.workspaceRoot ?? null,
   });
 
   // General module transformation middleware for all other paths

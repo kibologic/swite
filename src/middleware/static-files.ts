@@ -14,6 +14,7 @@ import { findWorkspaceRoot } from "../utils/workspace.js";
 export interface StaticFilesConfig {
   root: string;
   publicDir: string;
+  workspaceRoot?: string | null;
 }
 
 /**
@@ -88,7 +89,8 @@ export async function setupStaticFiles(
   });
 
   // 2. Workspace root node_modules (if different from app root)
-  const workspaceRootForNodeModules = await findWorkspaceRoot(config.root);
+  const workspaceRootForNodeModules =
+    config.workspaceRoot ?? (await findWorkspaceRoot(config.root));
   if (
     workspaceRootForNodeModules &&
     workspaceRootForNodeModules !== config.root

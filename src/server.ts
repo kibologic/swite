@@ -19,6 +19,11 @@ import { findSwissLibMonorepo } from "./utils/package-finder.js";
 
 export interface SwiteConfig {
   root: string;
+  // Workspace/monorepo root. When set, Swite will use this for resolving
+  // node_modules, workspace packages, and import-map generation.
+  // This avoids relying on auto-detection (pnpm-workspace.yaml) which may not
+  // exist in some deployment contexts.
+  rootDir?: string;
   publicDir: string;
   port: number;
   host: string;
@@ -52,6 +57,9 @@ export class SwiteServer {
 
   // CG-03: find workspace root by walking up from startDir
   private async findWorkspaceRoot(startDir: string): Promise<string | null> {
+    if (this.config.rootDir) {
+      return path.resolve(this.config.rootDir);
+    }
     let current = startDir;
     for (let i = 0; i < 6; i++) {
       try {
@@ -104,8 +112,10 @@ export class SwiteServer {
 
     // Setup middleware
     console.time("Middleware Setup");
+    const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
     const middlewareResult = await setupMiddleware(this.app, {
       root: this.config.root,
+      workspaceRoot,
       publicDir: this.config.publicDir,
       resolver: this.resolver,
       hmr: this.hmr,

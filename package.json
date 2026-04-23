@@ -1,6 +1,6 @@
 {
   "name": "@kibologic/swite",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "description": "SWITE - SWISS Development Server (Vite replacement)",
   "type": "module",
   "main": "dist/index.js",
