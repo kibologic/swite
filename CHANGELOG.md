@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.28 — 2026-04-23
+
+### Fixes
+
+- Fix pnpm `node_modules` static serving: avoid `path.join(..., req.path)` resetting the root when `req.path` is absolute.
+  This restores serving of CSS assets under `/node_modules/*` in production deploys (e.g. Railway).
+
 ## 0.2.27 — 2026-04-23
 
 ### Fixes
