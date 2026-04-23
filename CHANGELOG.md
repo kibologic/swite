@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.29 — 2026-04-23
+
+### Fixes
+
+- SPA fallback now serves HTML only for requests with `Accept: text/html`.
+  This prevents module/script/style fetches from receiving HTML (strict MIME failures) in production.
+
 ## 0.2.28 — 2026-04-23
 
 ### Fixes

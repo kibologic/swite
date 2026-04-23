@@ -429,6 +429,7 @@ export async function setupSPAFallback(
   app.all("*", async (req, res, next) => {
     const url = req.url.split("?")[0];
     const fullUrl = req.url;
+    const accept = String(req.headers?.accept || "");
     
     // DEBUG: Verify handler is being called
     process.stderr.write(`[SPA FALLBACK] Handler called for: ${req.method} ${fullUrl}\n`);
@@ -495,6 +496,14 @@ export async function setupSPAFallback(
       console.error(chalk.red(`[SPA FALLBACK] Returning 404 for ${url} - should have been handled earlier`));
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`File not found: ${url}`);
+      return;
+    }
+
+    // Only serve SPA HTML for real navigation/document requests.
+    // If a script/style/module fetch hits the fallback, returning HTML causes strict MIME failures.
+    if (!accept.includes("text/html")) {
+      res.status(404).setHeader("Content-Type", "text/plain");
+      res.send(`Not found: ${url}`);
       return;
     }
     
