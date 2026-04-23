@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.27 — 2026-04-23
+
+### Fixes
+
+- Disable jsDelivr `+esm` fallback for scoped packages by default to avoid 404s for private registries.
+  Use `SWITE_CDN_FALLBACK_SCOPES` to opt in specific public scopes when needed.
+
 ## 0.2.0 — 2026-03-26
 
 ### Bug Fixes

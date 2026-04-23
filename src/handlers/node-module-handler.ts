@@ -14,6 +14,7 @@ import { UIHandler } from "./ui-handler.js";
 import { UIXHandler } from "./uix-handler.js";
 import { TSHandler } from "./ts-handler.js";
 import { findWorkspaceRoot } from "../utils/workspace.js";
+import { shouldUseCdnFallback } from "../utils/cdn-fallback.js";
 
 export class NodeModuleHandler extends BaseHandler {
   private uiHandler: UIHandler;
@@ -331,6 +332,7 @@ export class NodeModuleHandler extends BaseHandler {
     }
 
     if (!pkgName || pkgName === "." || pkgName === "..") return null;
+    if (!shouldUseCdnFallback(pkgName)) return null;
     // jsDelivr +esm serves ESM build; works for reflect-metadata and most npm packages
     return `https://cdn.jsdelivr.net/npm/${pkgName}/+esm`;
   }

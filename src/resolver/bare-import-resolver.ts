@@ -7,6 +7,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import chalk from "chalk";
 import { findSwissLibMonorepo } from "../utils/package-finder.js";
+import { shouldUseCdnFallback } from "../utils/cdn-fallback.js";
 import type { UrlResolverContext, WorkspacePackageResolverContext } from "./url-resolver.js";
 import { resolveWorkspacePackage } from "./workspace-package-resolver.js";
 import { toUrl } from "./url-resolver.js";
@@ -23,15 +24,15 @@ export async function resolveBareImport(
   context: BareImportResolverContext
 ): Promise<string> {
   console.log(`[SWITE] resolveBareImport CALLED: ${specifier}`);
-  try {
-    // Handle scoped packages (@kibologic/core) and regular packages
-    const parts = specifier.split("/");
-    const isScoped = specifier.startsWith("@");
-    const pkgName = isScoped ? `${parts[0]}/${parts[1]}` : parts[0];
-    const subPath = isScoped
-      ? parts.slice(2).join("/")
-      : parts.slice(1).join("/");
 
+  // Extract package name outside the try/catch so fallback logic can reference it.
+  // This must stay project-agnostic: works for both scoped and unscoped packages.
+  const parts = specifier.split("/");
+  const isScoped = specifier.startsWith("@");
+  const pkgName = isScoped ? `${parts[0]}/${parts[1]}` : parts[0];
+  const subPath = isScoped ? parts.slice(2).join("/") : parts.slice(1).join("/");
+
+  try {
     console.log(
       `[SWITE] resolveBareImport: ${specifier} -> pkgName: ${pkgName}, subPath: ${subPath}`,
     );
@@ -114,6 +115,16 @@ export async function resolveBareImport(
         }
 
         // Last resort: CDN fallback
+        if (!shouldUseCdnFallback(pkgName)) {
+          // Scoped packages may be private and are not necessarily available on public npm CDNs.
+          console.warn(
+            `[SWITE] Package ${pkgName} not found anywhere. Scoped package detected; CDN fallback is disabled by default.`,
+          );
+          // Return a same-origin node_modules URL to make failures explicit and allow the
+          // node-module handler to try serving it.
+          return `/node_modules/${specifier}`;
+        }
+
         console.warn(
           `[SWITE] Package ${pkgName} not found anywhere, using CDN fallback`,
         );
@@ -261,12 +272,16 @@ export async function resolveBareImport(
       }
     }
 
-    // Fallback to CDN (jsDelivr; esm.sh returns 500 for some packages)
-    console.warn(`[SWITE] Could not resolve ${specifier}, using CDN`);
-    return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
+    // Fallback to CDN (jsDelivr; esm.sh returns 500 for some packages) when allowed.
+    console.warn(`[SWITE] Could not resolve ${specifier}, using fallback`);
+    return shouldUseCdnFallback(pkgName)
+      ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
+      : `/node_modules/${specifier}`;
   } catch (error) {
     console.warn(`[SWITE] Error resolving ${specifier}:`, error);
-    return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
+    return shouldUseCdnFallback(pkgName)
+      ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
+      : `/node_modules/${specifier}`;
   }
 }
 
@@ -434,7 +449,9 @@ async function resolveWorkspacePackageEntry(
   }
 
   console.warn(
-    `[SWITE] Entry point not found for ${pkgName} at ${fullPath}, using CDN fallback`,
+    `[SWITE] Entry point not found for ${pkgName} at ${fullPath}, using fallback`,
   );
-  return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
+  return shouldUseCdnFallback(pkgName)
+    ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
+    : `/node_modules/${specifier}`;
 }

@@ -13,6 +13,7 @@ import { ModuleResolver } from "./resolver.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
+import { shouldUseCdnFallback } from "./utils/cdn-fallback.js";
 
 export async function rewriteImports(
   code: string,
@@ -234,7 +235,7 @@ export async function rewriteImports(
           `[SWITE] import-rewriter: Resolved ${actualSpecifier} -> ${resolved}`,
         );
 
-        // CRITICAL: If resolver returns unchanged or invalid, use CDN fallback
+        // CRITICAL: If resolver returns unchanged or invalid, use CDN fallback (when allowed).
         if (
           !resolved ||
           resolved === actualSpecifier ||
@@ -243,14 +244,18 @@ export async function rewriteImports(
           console.warn(
             `[SWITE] import-rewriter: Resolver returned invalid/unchanged result for ${actualSpecifier}, using CDN fallback`,
           );
-          resolved = `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`;
+          resolved = shouldUseCdnFallback(actualSpecifier)
+            ? `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`
+            : `/node_modules/${actualSpecifier}`;
         }
       } catch (error) {
         console.error(
           `[SWITE] import-rewriter: Error resolving ${actualSpecifier}:`,
           error,
         );
-        resolved = `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`;
+        resolved = shouldUseCdnFallback(actualSpecifier)
+          ? `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`
+          : `/node_modules/${actualSpecifier}`;
       }
 
       // For development: prefer src/ over dist/ for SWISS and workspace packages
@@ -325,14 +330,15 @@ export async function rewriteImports(
           console.error(
             `[SWITE] import-rewriter: ⚠️ CRITICAL - Bare import "${bareImport}" still in code after rewriting!`,
           );
-          // Force CDN fallback (jsDelivr; esm.sh returns 500 for some packages)
-          const cdnUrl = `https://cdn.jsdelivr.net/npm/${bareImport}/+esm`;
+          const replacement = shouldUseCdnFallback(bareImport)
+            ? `https://cdn.jsdelivr.net/npm/${bareImport}/+esm`
+            : `/node_modules/${bareImport}`;
           rewritten = rewritten.replace(
             new RegExp(bareImport.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-            cdnUrl,
+            replacement,
           );
           console.error(
-            `[SWITE] import-rewriter: 🔧 FORCED replacement of "${bareImport}" with "${cdnUrl}"`,
+            `[SWITE] import-rewriter: 🔧 FORCED replacement of "${bareImport}" with "${replacement}"`,
           );
         }
       }
