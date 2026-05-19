@@ -106,21 +106,9 @@ export function injectEnvPolyfill(code: string): string {
   const polyfill = `
 // SWITE import.meta.env polyfill
 import { env as switeEnv } from '/__swite_env';
-if (typeof globalThis !== 'undefined') {
-  globalThis.__swite_env__ = switeEnv;
-}
-if (typeof import !== 'undefined' && import.meta) {
-  import.meta.env = switeEnv;
-} else if (typeof globalThis !== 'undefined') {
-  // Fallback for environments without import.meta
-  if (!globalThis.import) {
-    globalThis.import = { meta: {} };
-  }
-  if (!globalThis.import.meta) {
-    globalThis.import.meta = {};
-  }
-  globalThis.import.meta.env = switeEnv;
-}
+globalThis.__swite_env__ = switeEnv;
+// import.meta.env is always available inside an ES module
+import.meta.env = switeEnv;
 `;
 
   // Find the first import statement or start of file
