@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import chalk from "chalk";
-import { SwiteServer } from "./server.js";
-import { loadUserConfig } from "./config-loader.js";
+import { SwiteServer } from "./dev-engine/server.js";
+import { loadUserConfig } from "./config/config-loader.js";
 import {
   startPythonDevService,
   stopPythonDevService,
-} from "./dev/pythonDevManager.js";
-import { setProductionMode } from "./proxy/proxyToPython.js";
+} from "./dev-engine/pythonDevManager.js";
+import { setProductionMode } from "./adapters/proxy/proxyToPython.js";
 
 const [, , command, ...args] = process.argv;
 const root = resolve(process.cwd());
