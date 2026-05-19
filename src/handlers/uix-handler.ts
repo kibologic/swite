@@ -9,6 +9,7 @@ import { promises as fs } from "node:fs";
 import { UiCompiler } from "@kibologic/compiler";
 import chalk from "chalk";
 import { rewriteImports } from "../import-rewriter.js";
+import { inlineEnvReferences } from "../env.js";
 import { compilationCache } from "../cache/compilation-cache.js";
 import { fixSwissLibPaths } from "../utils/path-fixup.js";
 import {
@@ -73,6 +74,9 @@ export class UIXHandler extends BaseHandler {
 
     // Fix compiler-emitted wrong paths before import rewriting
     compiled = fixSwissLibPaths(compiled);
+
+    // Inline import.meta.env references before import rewriting
+    compiled = inlineEnvReferences(compiled, this.context.env);
 
     // Strip CSS static-asset imports — they are not ES modules
     const beforeCss = compiled;
