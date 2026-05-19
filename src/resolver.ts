@@ -6,7 +6,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import chalk from "chalk";
 import type { ImportMap } from "./utils/generate-import-map.js";
-import { findSwissLibMonorepo } from "./utils/package-finder.js";
+import { findWorkspaceRoot } from "./utils/workspace.js";
 import { toUrl, type UrlResolverContext, type WorkspacePackageResolverContext } from "./resolver/url-resolver.js";
 import { resolveWorkspacePackage } from "./resolver/workspace-package-resolver.js";
 import { resolveBareImport, type BareImportResolverContext } from "./resolver/bare-import-resolver.js";
@@ -33,28 +33,6 @@ export class ModuleResolver {
 
   private async getWorkspaceRoot(): Promise<string | null> {
     if (this.workspaceRoot) return this.workspaceRoot;
-
-    const findWorkspaceRoot = async (
-      startDir: string,
-    ): Promise<string | null> => {
-      let current = startDir;
-      for (let i = 0; i < 5; i++) {
-        const workspaceFile = path.join(current, "pnpm-workspace.yaml");
-        const packageJson = path.join(current, "package.json");
-        if (
-          (await this.fileExists(workspaceFile)) ||
-          ((await this.fileExists(packageJson)) &&
-            JSON.parse(await fs.readFile(packageJson, "utf-8")).workspaces)
-        ) {
-          return current;
-        }
-        const parent = path.dirname(current);
-        if (parent === current) break;
-        current = parent;
-      }
-      return null;
-    };
-
     this.workspaceRoot = await findWorkspaceRoot(this.root);
     return this.workspaceRoot;
   }
