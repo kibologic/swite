@@ -6,7 +6,7 @@
 
 import express from "express";
 import type { Express } from "express";
-import { promises as fs } from "node:fs";
+import { promises as fs, realpathSync, existsSync } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
 import { findWorkspaceRoot } from "../utils/workspace.js";
@@ -105,7 +105,7 @@ export async function setupStaticFiles(
       // But also check if package exists in app node_modules first
       app.use("/node_modules", (req, res, next) => {
         const url = req.url.split("?")[0];
-        // Skip source files in node_modules - they should be handled by module transformation
+        // Skip source files - let module transformation middleware handle them
         if (
           url.endsWith(".ui") ||
           url.endsWith(".uix") ||
@@ -115,36 +115,33 @@ export async function setupStaticFiles(
         ) {
           return next();
         }
-        
-        // Try app node_modules first, then workspace
-        // req.path starts with '/', and path.join treats an absolute segment as a reset.
-        // Strip leading slashes so we actually check inside the intended node_modules roots.
-        const relPath = req.path.replace(/^\/+/, "");
-        const appPath = path.join(config.root, "node_modules", relPath);
-        const workspacePath = path.join(workspaceNodeModules, relPath);
 
-        // Check if file exists in app node_modules first
-        fs.access(appPath)
-          .then(() => {
-            // File exists in app node_modules, serve it
-            express.static(path.join(config.root, "node_modules"))(
-              req,
-              res,
-              next,
-            );
-          })
-          .catch(() => {
-            // File doesn't exist in app node_modules, try workspace
-            fs.access(workspacePath)
-              .then(() => {
-                // File exists in workspace node_modules, serve it
-                express.static(workspaceNodeModules)(req, res, next);
-              })
-              .catch(() => {
-                // File doesn't exist in either, continue to next middleware
-                next();
-              });
-          });
+        // Strip leading slash: req.path inside app.use('/node_modules') is already
+        // relative to that prefix, e.g. '/@kibologic/shell/design-tokens/primitive.css'
+        const relPath = req.path.replace(/^\/+/, "");
+        if (!relPath) return next();
+
+        // Resolve pnpm symlinks explicitly (same mechanism UIHandler uses).
+        // express.static / fs.access can silently fail on pnpm virtual-store symlinks
+        // in production containers, so we use realpathSync to get the real path first.
+        const isScoped = relPath.startsWith("@");
+        const parts = relPath.split("/");
+        const pkgName = isScoped ? `${parts[0]}/${parts[1]}` : parts[0];
+        const subPath = isScoped ? parts.slice(2).join("/") : parts.slice(1).join("/");
+
+        const pkgSymLink = path.join(workspaceNodeModules, pkgName);
+        try {
+          const pkgReal = realpathSync(pkgSymLink);
+          const realAbs = path.join(pkgReal, subPath);
+          if (existsSync(realAbs)) {
+            res.sendFile(realAbs);
+            return;
+          }
+        } catch {
+          // symlink missing or broken — fall through to next()
+        }
+
+        next();
       });
       console.log(
         chalk.gray(

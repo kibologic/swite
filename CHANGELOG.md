@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.31
+
+### Patch Changes
+
+- Fix workspace node_modules static serving for pnpm virtual-store symlinks: replace fs.access+express.static with realpathSync+res.sendFile so CSS and other assets resolve correctly in Railway/pnpm deployments
+
 ## 0.2.29 — 2026-04-23
 
 ### Fixes
