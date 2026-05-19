@@ -45,4 +45,24 @@ export class BaseHandler {
       return false;
     }
   }
+
+  protected async getDependencies(compiled: string): Promise<string[]> {
+    const deps: string[] = [];
+    const importPattern = /(?:import|from|export).*['"]([^'"]+)['"]/g;
+    let match;
+    while ((match = importPattern.exec(compiled)) !== null) {
+      const specifier = match[1];
+      if (specifier.startsWith("/") || specifier.startsWith("@")) {
+        try {
+          const resolved = await this.context.resolver.resolve(specifier, "");
+          if (resolved && !resolved.startsWith("http")) {
+            deps.push(resolved);
+          }
+        } catch {
+          // ignore resolution errors during dependency tracking
+        }
+      }
+    }
+    return deps;
+  }
 }
