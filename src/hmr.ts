@@ -125,41 +125,40 @@ export class HMREngine {
   }
 
   getClientScript(): string {
+    // NOTE: This string is served as plain JavaScript to the browser.
+    // No TypeScript syntax (generics, type annotations, `as` casts) is allowed here.
     return `
 // SWITE HMR Client
 console.log('[SWITE] HMR enabled');
 
-const socket = new WebSocket('ws://localhost:${this.port}');
-const moduleGraph = new Map<string, Set<string>>();
-const hotModules = new Map<string, any>();
+const socket = new WebSocket('ws://' + window.location.hostname + ':${this.port}');
+const moduleGraph = new Map();
+const hotModules = new Map();
 
 socket.addEventListener('open', () => {
   console.log('[SWITE] HMR connected');
 });
 
-socket.addEventListener('message', (event) => {
+socket.addEventListener('message', async (event) => {
   const data = JSON.parse(event.data);
-  
+
   if (data.type === 'update') {
     console.log('[SWITE] Processing update:', data.path, 'Type:', data.updateType);
-    
+
     if (data.updateType === 'style') {
-      // Hot swap CSS
       updateStyles();
       console.log('[SWITE] Styles hot updated');
     } else if (data.updateType === 'hot') {
-      // Hot reload component
       const moduleName = extractModuleName(data.path);
-      
+
       if (moduleName && hotModules.has(moduleName)) {
-        const oldModule = hotModules.get(moduleName);
         try {
           invalidateModule(moduleName);
           invalidateDependents(moduleName);
-          
+
           const updatedModule = await import(data.path + '?t=' + Date.now());
           hotModules.set(moduleName, updatedModule);
-          
+
           updateComponent(moduleName, updatedModule);
           console.log('[SWITE] Component hot updated:', moduleName);
         } catch (error) {
@@ -171,7 +170,6 @@ socket.addEventListener('message', (event) => {
         window.location.reload();
       }
     } else {
-      // Full reload for everything else
       console.log('[SWITE] Full page reload required');
       window.location.reload();
     }
@@ -179,40 +177,31 @@ socket.addEventListener('message', (event) => {
 });
 
 function updateStyles() {
-  // Find all style and link tags
-  const styles = document.querySelectorAll('link[rel="stylesheet"], style');
-  styles.forEach(style => {
-    if (style.tagName === 'LINK' && style.getAttribute('href')) {
-      const href = style.getAttribute('href');
-      if (href && !href.includes('?t=')) {
-        // Add timestamp to force reload
-        style.setAttribute('href', href + '?t=' + Date.now());
-      }
+  const links = document.querySelectorAll('link[rel="stylesheet"]');
+  links.forEach(link => {
+    const href = link.getAttribute('href');
+    if (href) {
+      // Strip existing ?t= query before adding a fresh timestamp so repeated
+      // style updates always trigger a new network request.
+      const base = href.replace(/[?&]t=\\d+/, '');
+      link.setAttribute('href', base + (base.includes('?') ? '&' : '?') + 't=' + Date.now());
     }
   });
 }
 
-function extractModuleName(path: string): string | null {
-  // Extract module name from file path
-  const parts = path.split('/');
+function extractModuleName(filePath) {
+  const parts = filePath.split('/');
   const fileName = parts[parts.length - 1];
-  
-  if (fileName) {
-    const nameWithoutExt = fileName.replace(/.[^.]+$/, "");
-    return nameWithoutExt;
-  }
-  
-  return null;
+  return fileName ? fileName.replace(/\\.[^.]+$/, '') : null;
 }
 
-function invalidateModule(moduleName: string) {
-  // Clear module from cache
-  if (typeof window !== 'undefined' && (window as any).__swiss_modules__) {
-    delete (window as any).__swiss_modules__[moduleName];
+function invalidateModule(moduleName) {
+  if (window.__swiss_modules__) {
+    delete window.__swiss_modules__[moduleName];
   }
 }
 
-function invalidateDependents(moduleName: string) {
+function invalidateDependents(moduleName) {
   const dependents = moduleGraph.get(moduleName);
   if (dependents) {
     for (const dependent of dependents) {
@@ -221,13 +210,11 @@ function invalidateDependents(moduleName: string) {
   }
 }
 
-function updateComponent(moduleName: string, newModule: any) {
-  // Find and update component instances
-  if (typeof window !== 'undefined' && (window as any).__swiss_instances__) {
-    const instances = (window as any).__swiss_instances__[moduleName];
+function updateComponent(moduleName, newModule) {
+  if (window.__swiss_instances__) {
+    const instances = window.__swiss_instances__[moduleName];
     if (instances && Array.isArray(instances)) {
       instances.forEach(instance => {
-        // Update component state if it has update method
         if (instance && typeof instance.update === 'function') {
           instance.update(newModule.default || newModule);
         }
@@ -244,18 +231,14 @@ socket.addEventListener('error', (error) => {
   console.error('[SWITE] HMR error:', error);
 });
 
-// Register module for hot reloading
-if (typeof window !== 'undefined') {
-  (window as any).__swiss_modules__ = (window as any).__swiss_modules__ || {};
-  (window as any).__swiss_instances__ = (window as any).__swiss_instances__ || {};
-  
-  // Auto-register current module
-  const currentScript = document.currentScript;
-  if (currentScript && currentScript.src) {
-    const moduleName = extractModuleName(currentScript.src);
-    if (moduleName) {
-      (window as any).__swiss_modules__[moduleName] = true;
-    }
+window.__swiss_modules__ = window.__swiss_modules__ || {};
+window.__swiss_instances__ = window.__swiss_instances__ || {};
+
+const currentScript = document.currentScript;
+if (currentScript && currentScript.src) {
+  const moduleName = extractModuleName(currentScript.src);
+  if (moduleName) {
+    window.__swiss_modules__[moduleName] = true;
   }
 }
 `;
