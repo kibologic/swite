@@ -1,5 +1,5 @@
 # DIRECTIVE — swite
-> Last updated: 2026-03-02 · Owner: Kibologic · Repo: kibologic/swite
+> Last updated: 2026-05-19 · Owner: Kibologic · Repo: kibologic/swite
 
 ---
 
@@ -413,3 +413,54 @@ Correct on sight in every session.
 - `healthCheck` polling should use exponential backoff after 5 failed attempts
 - `X-Internal-Token` is a shared secret between Node and Python — document in README
 - Every session starts by reading this file. Every session ends by updating it.
+
+---
+
+## Session Log — 2026-05-19: Architectural Modernization Sprint
+
+**Agent:** Long-term modernization, compiler evolution, and architectural stabilization agent.
+
+### Identified Weaknesses (from prior sprint analysis)
+- `import.meta.env` assignment is read-only — polyfill approach broken
+- Import rewriter offset tracking unreliable (3 fallback layers signal broken primary logic)
+- `/swiss-lib/` → `/swiss-packages/` fixup scattered across 7 places (symptom of unfixed upstream bug)
+- HMR client JS embedded as TS string — maintenance trap (6 bugs found last sprint)
+- `getDependencies()` duplicated between UIHandler/UIXHandler with empty importer
+- CSS stripping with 4 overlapping regexes — edge cases produce broken output
+- In-memory-only cache — cold start on every restart
+- Emergency `@kibologic/*` path guessing in bare-import-resolver
+
+### Work Executed This Session
+
+#### fix/env-inline
+**Problem:** `injectEnvPolyfill()` attempted `import.meta.env = switeEnv`. `import.meta` is read-only in ES modules — assignment silently fails or throws in strict environments. Apps using `import.meta.env.MODE` etc. get `undefined`.
+**Decision:** Replace runtime injection with compile-time text replacement. At serve time, run a regex pass that replaces `import.meta.env.KEY` literals with their actual values from the loaded `.env` files. No import needed, no read-only assignment, works everywhere ES modules run.
+**Files:** `src/env.ts`, `src/handlers/ui-handler.ts`, `src/handlers/uix-handler.ts`, `src/handlers/ts-handler.ts`
+**Status:** FIXED
+
+#### fix/import-rewriter
+**Problem:** The offset-tracking approach (`let offset = 0; offset += ...`) accumulates errors when quote stripping/adding adjusts string lengths differently than expected. The 3-layer fallback (force-replace + final regex pass) exists because the primary logic is known to misfire.
+**Decision:** Collect-then-apply-right-to-left. All replacements are gathered as `{start, end, replacement}` in original string coordinates (no offset needed). Sorted descending by `start`. Applied right-to-left so later positions are never shifted by earlier substitutions. Eliminates offset variable entirely.
+**Files:** `src/import-rewriter.ts`
+**Status:** FIXED
+
+#### fix/swiss-lib-paths
+**Problem:** `/swiss-lib/` → `/swiss-packages/` path fixup appeared in 7 places: ui-handler.ts ×3, uix-handler.ts ×3, import-rewriter.ts ×1 (inline) + 1 (final pass). Any new handler would need to add it again.
+**Decision:** Extract to `src/utils/path-fixup.ts` with a single `fixSwissLibPaths(code)` function. Call it once in each handler, before passing to the import rewriter. Remove all inline fixup blocks from handlers and the duplicate pass from import-rewriter.ts.
+**Note:** Root cause is still the compiler emitting wrong paths. This centralizes the workaround until the compiler is fixed at source.
+**Files:** `src/utils/path-fixup.ts` (new), `src/handlers/ui-handler.ts`, `src/handlers/uix-handler.ts`, `src/import-rewriter.ts`
+**Status:** FIXED
+
+#### fix/hmr-client-file
+**Problem:** `getClientScript()` in `src/hmr.ts` returns a plain JavaScript string (served directly to browsers) written inside a TypeScript file. Six TypeScript-specific syntax bugs were found last sprint. The string must be maintained as valid browser JS with no TS syntax — this is invisible to editors and linters.
+**Decision:** Extract to `src/hmr-client.js`. This is a real JS file — editors lint it, syntax errors are caught immediately. Port and env are injected via `{{PORT}}` / `{{VERSION}}` template placeholders replaced at read time using `readFileSync`. The main `hmr.ts` reads it once at startup.
+**Files:** `src/hmr-client.js` (new), `src/hmr.ts`
+**Status:** FIXED
+
+### Open Issues Carried Forward
+- S-01 through S-04: Python service integration (not yet started)
+- S-05: Fix link: deps → semver before publish
+- In-memory cache: persistent disk cache deferred
+- CSS modules: currently stripped, should return empty object
+- HMR state preservation: full module hot-replacement state transfer deferred
+- `@kibologic/*` emergency path guessing in bare-import-resolver: deferred (needs workspace resolver redesign)
