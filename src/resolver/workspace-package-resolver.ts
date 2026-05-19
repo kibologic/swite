@@ -20,196 +20,75 @@ export async function resolveWorkspacePackage(
   pkgName: string,
   context: WorkspacePackageResolverContext
 ): Promise<string | null> {
-  let workspaceRoot: string | null = null;
+  // Build the ordered list of roots to scan for workspace packages.
+  // Works for any package name/scope — no hardcoded scope guards.
   const workspaceRoots: string[] = [];
 
-  if (
-    pkgName.startsWith("@swiss-enterprise/") ||
-    pkgName.startsWith("@swiss-module/") ||
-    pkgName.startsWith("@kibologic/") ||
-    pkgName.startsWith("@swiss-framework/")
-  ) {
-    console.log(`[SWITE] Looking for SWS root for @swiss-enterprise package...`);
-    console.log(`[SWITE] Starting from app root: ${context.root}`);
-
-    const fallbackPaths = [
-      path.join(context.root, "..", ".."),
+  let workspaceRoot = await context.getWorkspaceRoot();
+  if (workspaceRoot) {
+    workspaceRoots.push(workspaceRoot);
+  } else {
+    // Walk up from app root looking for common workspace markers
+    for (const candidate of [
       path.join(context.root, ".."),
-    ];
-
-    const detectedWorkspaceRoot = await context.getWorkspaceRoot();
-    if (detectedWorkspaceRoot) {
-      const hasLibraries = await context.fileExists(path.join(detectedWorkspaceRoot, "libraries"));
-      const hasModules = await context.fileExists(path.join(detectedWorkspaceRoot, "modules"));
-      if (hasLibraries || hasModules) {
-        console.log(`[SWITE] ✅ Found workspace root via getWorkspaceRoot(): ${detectedWorkspaceRoot}`);
-        workspaceRoot = detectedWorkspaceRoot;
-        workspaceRoots.push(workspaceRoot);
-      }
-    }
-
-    for (const fallbackPath of fallbackPaths) {
-      const normalizedFallback = path.resolve(fallbackPath);
-      console.log(`[SWITE] Checking path: ${normalizedFallback}`);
-      const hasWorkspace = await context.fileExists(path.join(normalizedFallback, "pnpm-workspace.yaml"));
-      const hasModules = await context.fileExists(path.join(normalizedFallback, "modules"));
-      const hasLibraries = await context.fileExists(path.join(normalizedFallback, "libraries"));
-      const hasPackages = await context.fileExists(path.join(normalizedFallback, "packages"));
-      const hasAiAgents = await context.fileExists(path.join(normalizedFallback, "packages", "ai-agents", "package.json"));
-
-      console.log(`[SWITE]   hasWorkspace: ${hasWorkspace}, hasModules: ${hasModules}, hasLibraries: ${hasLibraries}, hasPackages: ${hasPackages}, hasAiAgents: ${hasAiAgents}`);
-
-      if (hasWorkspace || hasModules || hasLibraries || hasPackages || hasAiAgents) {
-        workspaceRoot = normalizedFallback;
-        console.log(`[SWITE] ✅ Found workspace root at: ${workspaceRoot}`);
-        workspaceRoots.push(workspaceRoot);
+      path.join(context.root, "..", ".."),
+    ]) {
+      const normalized = path.resolve(candidate);
+      if (
+        (await context.fileExists(path.join(normalized, "pnpm-workspace.yaml"))) ||
+        (await context.fileExists(path.join(normalized, "modules"))) ||
+        (await context.fileExists(path.join(normalized, "libraries")))
+      ) {
+        workspaceRoot = normalized;
+        workspaceRoots.push(normalized);
         break;
       }
     }
-
-    if (!workspaceRoot) {
-      console.warn(`[SWITE] ⚠️ Could not find workspace root via fallback paths, trying getWorkspaceRoot()...`);
-      workspaceRoot = await context.getWorkspaceRoot();
-      if (workspaceRoot) {
-        console.log(`[SWITE] ✅ Found workspace root via fallback getWorkspaceRoot(): ${workspaceRoot}`);
-        workspaceRoots.push(workspaceRoot);
-      } else {
-        console.warn(`[SWITE] ⚠️ Could not find workspace root, using last resort path...`);
-        workspaceRoots.push(path.join(context.root, "..", ".."));
-      }
-    }
-  } else {
-    workspaceRoot = await context.getWorkspaceRoot();
-
-    if (!workspaceRoot) {
-      console.log(`[SWITE] Workspace root not found via pnpm-workspace.yaml, trying fallbacks...`);
-      const fallbackPaths = [
-        path.join(context.root, "..", ".."),
-        path.join(context.root, ".."),
-      ];
-
-      for (const fallbackPath of fallbackPaths) {
-        const normalizedFallback = path.resolve(fallbackPath);
-        if (
-          (await context.fileExists(path.join(normalizedFallback, "pnpm-workspace.yaml"))) ||
-          (await context.fileExists(path.join(normalizedFallback, "modules"))) ||
-          (await context.fileExists(path.join(normalizedFallback, "libraries")))
-        ) {
-          workspaceRoot = normalizedFallback;
-          console.log(`[SWITE] Found workspace root via fallback: ${workspaceRoot}`);
-          break;
-        }
-      }
-    }
-
-    if (workspaceRoot) {
-      workspaceRoots.push(workspaceRoot);
-    } else {
+    if (!workspaceRoots.length) {
       workspaceRoots.push(path.join(context.root, "..", ".."));
-      workspaceRoots.push(path.join(context.root, "..", "..", ".."));
     }
   }
 
-  // For @kibologic/* packages, also check swiss-lib monorepo
-  if (pkgName.startsWith("@kibologic/")) {
-    const swissLib = await findSwissLibMonorepo(context.root);
-    if (swissLib) {
-      console.log(`[SWITE] Found swiss-lib monorepo at ${swissLib}`);
-      workspaceRoots.unshift(swissLib);
+  // Also include any co-located framework monorepo (any workspace with packages/)
+  try {
+    const monorepo = await findSwissLibMonorepo(context.root);
+    if (monorepo && !workspaceRoots.includes(monorepo)) {
+      workspaceRoots.unshift(monorepo);
     }
+    if (monorepo) {
+      const packagesDir = path.join(monorepo, "packages");
+      if (await context.fileExists(packagesDir) && !workspaceRoots.includes(packagesDir)) {
+        workspaceRoots.unshift(packagesDir);
+      }
+    }
+  } catch {
+    // monorepo not found — continue without it
   }
 
-  console.log(`[SWITE] Searching for workspace package: ${pkgName}`);
-  console.log(`[SWITE] Workspace roots: ${workspaceRoots.map((r) => path.resolve(r)).join(", ")}`);
-
-  // Use dynamic package registry instead of hardcoded directory searches
   const registry = getPackageRegistry();
-  
-  // Determine primary workspace root for scanning
-  let primaryRoot: string = workspaceRoots[0] ?? "";
-  if (!primaryRoot) {
-    primaryRoot = (await context.getWorkspaceRoot()) ?? context.root;
-  }
-  if (!primaryRoot) {
-    primaryRoot = context.root;
-  }
-  
-  const additionalRoots: string[] = workspaceRoots.slice(1);
-  
-  // Add swiss-lib monorepo if it exists (for @kibologic/* packages)
-  if (pkgName.startsWith("@kibologic/")) {
-    try {
-      const swissLib = await findSwissLibMonorepo(context.root);
-      if (swissLib && !additionalRoots.includes(swissLib) && swissLib !== primaryRoot) {
-        additionalRoots.unshift(swissLib); // Prioritize swiss-lib
-      }
-      // Also add swiss-lib/packages to ensure packages are found
-      if (swissLib) {
-        const swissLibPackages = path.join(swissLib, "packages");
-        if (await context.fileExists(swissLibPackages) && !additionalRoots.includes(swissLibPackages)) {
-          console.log(`[SWITE] Adding swiss-lib/packages to scan roots: ${swissLibPackages}`);
-          additionalRoots.unshift(swissLibPackages);
-        }
-      }
-    } catch (error: any) {
-      console.warn(`[SWITE] Error finding swiss-lib monorepo:`, error.message);
-    }
-  }
-  
-  // Ensure registry is scanned
+  const primaryRoot = workspaceRoots[0] ?? context.root;
+  const additionalRoots = workspaceRoots.slice(1);
+
   if (!registry.getPackageCount() && primaryRoot) {
-    console.log(`[SWITE] Package registry not scanned yet, scanning workspace at ${primaryRoot}...`);
     try {
       await registry.scanWorkspace(primaryRoot, additionalRoots);
     } catch (error: any) {
       console.error(`[SWITE] Error scanning package registry:`, error.message);
-      console.error(`[SWITE] Stack:`, error.stack);
     }
-  } else if (registry.getPackageCount() && pkgName.startsWith("@kibologic/")) {
-    // Registry already scanned but may not have swiss-lib/packages
-    // Check if @kibologic/core is missing from registry
-    const existingPkg = registry.findPackage(pkgName);
-    if (!existingPkg) {
-      console.log(`[SWITE] ${pkgName} not in registry, forcing rescan with swiss-lib/packages...`);
-      await registry.rescan();
-      // After rescan, if still not found, explicitly scan swiss-lib/packages
-      const stillMissing = !registry.findPackage(pkgName);
-      if (stillMissing) {
-        const swissLib = await findSwissLibMonorepo(context.root);
-        if (swissLib) {
-          const swissLibPackages = path.join(swissLib, "packages");
-          if (await context.fileExists(swissLibPackages)) {
-            console.log(`[SWITE] Explicitly scanning swiss-lib/packages: ${swissLibPackages}`);
-            await registry.scanWorkspace(swissLibPackages, []);
-          }
-        }
-      }
-    }
-  } else if (!primaryRoot) {
-    console.warn(`[SWITE] No workspace root found, cannot scan packages`);
   }
 
-  // Look up package in registry
   let packageInfo = registry.findPackage(pkgName);
-  
   if (packageInfo) {
-    console.log(`[SWITE] ✅ Found ${pkgName} at ${packageInfo.path} (via dynamic registry)`);
     return packageInfo.path;
   }
 
-  // If not found, try rescanning (in case packages were added or registry was stale)
-  console.log(`[SWITE] Package ${pkgName} not in registry, rescanning...`);
+  // Rescan in case the package was added after the initial scan
   await registry.rescan();
-  
   packageInfo = registry.findPackage(pkgName);
   if (packageInfo) {
-    console.log(`[SWITE] ✅ Found ${pkgName} at ${packageInfo.path} (after rescan)`);
     return packageInfo.path;
   }
 
-  // Log all found packages for debugging
-  const allPackages = registry.getAllPackages().map(p => p.name).join(", ");
-  console.log(`[SWITE] ❌ Package ${pkgName} not found in workspace`);
-  console.log(`[SWITE] Scanned ${registry.getPackageCount()} packages: ${allPackages}`);
+  console.log(`[SWITE] Package ${pkgName} not found in workspace (scanned ${registry.getPackageCount()} packages)`);
   return null;
 }
