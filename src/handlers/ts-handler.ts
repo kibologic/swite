@@ -21,33 +21,6 @@ export class TSHandler extends BaseHandler {
     super(context);
   }
 
-  /**
-   * Extract dependencies from compiled code (import paths)
-   */
-  private async getDependencies(compiled: string): Promise<string[]> {
-    const deps: string[] = [];
-    const importPattern = /(?:import|from|export).*['"]([^'"]+)['"]/g;
-    let match;
-    while ((match = importPattern.exec(compiled)) !== null) {
-      const specifier = match[1];
-      // Only track absolute paths and workspace paths (not relative)
-      if (specifier.startsWith("/") || specifier.startsWith("@")) {
-        try {
-          const resolved = await this.context.resolver.resolve(
-            specifier,
-            "",
-          );
-          if (resolved && !resolved.startsWith("http")) {
-            deps.push(resolved);
-          }
-        } catch {
-          // Ignore resolution errors
-        }
-      }
-    }
-    return deps;
-  }
-
   async handle(url: string, res: Response): Promise<void> {
     const filePath = await this.resolveFilePath(url);
     console.log(chalk.gray(`[.ts] ${url}`));
