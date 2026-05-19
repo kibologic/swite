@@ -8,6 +8,7 @@ import type { Response } from "express";
 import { promises as fs } from "node:fs";
 import chalk from "chalk";
 import { rewriteImports } from "../import-rewriter.js";
+import { inlineEnvReferences } from "../env.js";
 import { compilationCache } from "../cache/compilation-cache.js";
 import {
   BaseHandler,
@@ -129,13 +130,13 @@ export class TSHandler extends BaseHandler {
       sourcefile: filePath,
     });
 
+    const inlined = inlineEnvReferences(result.code, this.context.env);
     const rewritten = await rewriteImports(
-      result.code,
+      inlined,
       filePath,
       this.context.resolver,
     );
 
-    // Store in cache (use result.code as "compiled" for dependency tracking)
     await compilationCache.set(
       filePath,
       result.code,
