@@ -23,7 +23,6 @@ export async function resolveBareImport(
   specifier: string,
   context: BareImportResolverContext
 ): Promise<string> {
-  console.log(`[SWITE] resolveBareImport CALLED: ${specifier}`);
 
   // Extract package name outside the try/catch so fallback logic can reference it.
   // This must stay project-agnostic: works for both scoped and unscoped packages.
@@ -33,10 +32,6 @@ export async function resolveBareImport(
   const subPath = isScoped ? parts.slice(2).join("/") : parts.slice(1).join("/");
 
   try {
-    console.log(
-      `[SWITE] resolveBareImport: ${specifier} -> pkgName: ${pkgName}, subPath: ${subPath}`,
-    );
-
     // Find package.json - check multiple node_modules locations
     let pkgDir: string | null = null;
     let pkgJsonPath: string | null = null;
@@ -58,7 +53,6 @@ export async function resolveBareImport(
       const swissNodeModules = path.join(swissLib, "node_modules");
       if (await context.fileExists(swissNodeModules)) {
         nodeModulesLocations.push(swissNodeModules);
-        console.log(`[SWITE] Added swiss-lib monorepo node_modules for ${pkgName}`);
       }
     }
 
@@ -69,16 +63,11 @@ export async function resolveBareImport(
       if (await context.fileExists(testPkgJsonPath)) {
         pkgDir = testPkgDir;
         pkgJsonPath = testPkgJsonPath;
-        console.log(`[SWITE] Found ${pkgName} in ${nodeModulesPath}`);
         break;
       }
     }
 
     if (!pkgJsonPath || !pkgDir) {
-      console.log(
-        `[SWITE] Package ${pkgName} not in node_modules, checking workspace...`,
-      );
-
       // EMERGENCY FIX: For @kibologic/* packages, try direct path first
       if (pkgName.startsWith('@kibologic/')) {
         const pkgShortName = pkgName.replace('@kibologic/', '');
@@ -93,7 +82,6 @@ export async function resolveBareImport(
         for (const candidatePath of potentialPaths) {
           const candidatePkgJson = path.join(candidatePath, 'package.json');
           if (await context.fileExists(candidatePkgJson)) {
-            console.log(`[SWITE] Emergency: Found ${pkgName} at ${candidatePath}`);
             pkgDir = candidatePath;
             pkgJsonPath = candidatePkgJson;
             break;
@@ -146,9 +134,6 @@ export async function resolveBareImport(
     }
 
     const workspacePkg = await context.resolveWorkspacePackage(pkgName);
-    console.log(
-      `[SWITE] resolveBareImport (node_modules): workspacePkg=${workspacePkg}, realPkgDir=${realPkgDir}, pkgName=${pkgName}`,
-    );
     if (workspacePkg) {
       const normalizedWorkspacePkg = path
         .resolve(workspacePkg)
@@ -164,9 +149,6 @@ export async function resolveBareImport(
         normalizedRealPkgDir === normalizedWorkspacePkg ||
         normalizedRealPkgDir.includes(normalizedWorkspacePkg)
       ) {
-        console.log(
-          `[SWITE] resolveBareImport (node_modules): Using workspace resolution for ${pkgName}`,
-        );
         return await resolveWorkspacePackageEntry(
           workspacePkg,
           pkgName,
@@ -206,9 +188,6 @@ export async function resolveBareImport(
             .replace("/dist/", "/src/")
             .replace(/\.js$/, ".ts");
           if (await context.fileExists(srcFullPath)) {
-            console.log(
-              `[SWITE] resolveBareImport: Using source file instead of dist: ${srcFullPath}`,
-            );
             return await toUrl(srcFullPath, context);
           }
         }
@@ -306,10 +285,6 @@ async function resolveWorkspacePackageEntry(
       : "";
     let exportKey = subPathWithoutExt ? `./${subPathWithoutExt}` : ".";
 
-    console.log(
-      `[SWITE] resolveBareImport (workspace): pkgName=${pkgName}, subPath=${subPath}, subPathWithoutExt=${subPathWithoutExt}, exportKey=${exportKey}`,
-    );
-
     // Try to find matching export
     if (subPath && !workspacePkgJson.exports[exportKey]) {
       if (subPathWithoutExt) {
@@ -367,7 +342,6 @@ async function resolveWorkspacePackageEntry(
       if (normalizedFull.includes("/dist/")) {
         const srcPath = fullPath.replace(/[/\\]dist[/\\]/, path.sep + "src" + path.sep).replace(/\.js$/i, ".ts");
         if (await context.fileExists(srcPath)) {
-          console.log(`[SWITE] resolveBareImport (workspace): preferring src over dist: ${srcPath}`);
           return await toUrl(srcPath, context);
         }
       }
@@ -402,7 +376,6 @@ async function resolveWorkspacePackageEntry(
   if (normalizedFull.includes("/dist/")) {
     const srcPath = fullPath.replace(/[/\\]dist[/\\]/, path.sep + "src" + path.sep).replace(/\.js$/i, ".ts");
     if (await context.fileExists(srcPath)) {
-      console.log(`[SWITE] resolveBareImport (fallback): preferring src over dist: ${srcPath}`);
       return await toUrl(srcPath, context);
     }
   }
