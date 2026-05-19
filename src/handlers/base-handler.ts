@@ -13,6 +13,7 @@ export interface HandlerContext {
   resolver: ModuleResolver;
   root: string;
   workspaceRoot: string | null;
+  env: Record<string, string>;
 }
 
 /**
