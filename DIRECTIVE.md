@@ -464,3 +464,25 @@ Correct on sight in every session.
 - CSS modules: currently stripped, should return empty object
 - HMR state preservation: full module hot-replacement state transfer deferred
 - `@kibologic/*` emergency path guessing in bare-import-resolver: deferred (needs workspace resolver redesign)
+
+---
+
+## Session Log — 2026-05-19 (continued): Context-resumed work
+
+### Work Executed
+
+#### fix/swiss-lib-paths (completed from prior session)
+All changes written in prior session were verified (npx tsc --noEmit clean), committed, and shipped to main via development → staging → main.
+
+#### fix/env-inline (completed from prior session)
+Same status — context resumed, tsc clean, shipped.
+
+#### fix/hmr-client-file (completed from prior session)
+Same status — tsc clean, shipped.
+
+### Open Issues Still Pending
+- S-01 through S-04: Python service integration
+- S-05: semver dep fix before publish
+- Transform pipeline extraction (Lock 3 architecture)
+- Resolver stratification (Lock 3)
+- Python adapter interface (Lock 3)
