@@ -113,12 +113,12 @@ describe("CSS Middleware Function", () => {
 
     try {
       // Create files matching pos-site structure
-      const indexUi = `import { SwissApp } from '@kibologic/core'
+      const indexUi = `import { SwissApp } from '@swissjs/core'
 import { App } from './App.uix'
 
 SwissApp.mount(App, '#root')`;
 
-      const appUix = `import { SwissComponent } from '@kibologic/core'
+      const appUix = `import { SwissComponent } from '@swissjs/core'
 import './styles/globals.css'
 import './styles/cyber-theme.css'
 
