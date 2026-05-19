@@ -48,28 +48,20 @@ export class SwiteBuilder {
     const startTime = Date.now();
     console.log(chalk.cyan("\n⚡ SWITE - Production Build\n"));
 
+    const tempDir = path.join(this.config.root, ".swite-build");
     try {
-      // Step 1: Clean output directory
       await this.cleanOutputDir();
-
-      // Step 2: Compile Swiss files to temp directory
-      const tempDir = path.join(this.config.root, ".swite-build");
       await this.compileSwissFiles(tempDir);
-
-      // Step 3: Bundle with esbuild
       await this.bundle(tempDir);
-
-      // Step 4: Copy public assets
       await this.copyPublicAssets();
-
-      // Step 5: Clean up temp directory
-      await fs.rm(tempDir, { recursive: true, force: true });
 
       const duration = Date.now() - startTime;
       console.log(chalk.green(`\n✅ Build completed in ${duration}ms\n`));
     } catch (error) {
       console.error(chalk.red("\n❌ Build failed:"), error);
       throw error;
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
     }
   }
 
