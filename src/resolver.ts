@@ -60,10 +60,6 @@ export class ModuleResolver {
   }
 
   async resolve(specifier: string, importer: string): Promise<string> {
-    console.log(
-      `[SWITE] resolve CALLED: specifier: ${specifier}, importer: ${importer}`,
-    );
-
     // Check import map first (fast path)
     if (this.importMap && !specifier.startsWith(".") && !specifier.startsWith("/")) {
       const mapped = this.importMap.imports[specifier];
@@ -110,9 +106,7 @@ export class ModuleResolver {
         fileExists: (p) => this.fileExists(p),
         resolveWorkspacePackage: (pkgName) => this.resolveWorkspacePackage(pkgName),
       };
-      const result = await resolveBareImport(specifier, context);
-      console.log(`[SWITE] resolve RESULT: ${specifier} -> ${result}`);
-      return result;
+      return await resolveBareImport(specifier, context);
     }
 
     // Handle absolute paths (already URLs)
@@ -158,17 +152,9 @@ export class ModuleResolver {
     const hasExtension = /\.(ui|uix|ts|tsx|js|jsx|mjs)$/.test(specifier);
 
     if (hasExtension) {
-      // Specifier has extension, resolve it directly
       const resolved = path.resolve(importerDir, specifier);
-      console.log(
-        `[SWITE] resolve relative (hasExt): ${specifier}, importerDir: ${importerDir}, resolved: ${resolved}, exists: ${await this.fileExists(resolved)}`,
-      );
       if (await this.fileExists(resolved)) {
-        const url = await this.toUrl(resolved);
-        console.log(
-          `[SWITE] resolve relative: ${specifier} -> ${resolved} -> ${url}`,
-        );
-        return url;
+        return await this.toUrl(resolved);
       }
     }
 
@@ -176,23 +162,14 @@ export class ModuleResolver {
     // Strip any existing extension from specifier (but preserve .ui/.uix if present)
     const specifierWithoutExt = specifier.replace(/\.(js|ts|jsx|tsx|mjs)$/, "");
     const resolved = path.resolve(importerDir, specifierWithoutExt);
-    console.log(
-      `[SWITE] resolve relative (trying extensions): specifierWithoutExt: ${specifierWithoutExt}, resolved: ${resolved}`,
-    );
 
     // Try adding extensions (prioritize .ui and .uix for SWISS files)
     const extensions = [".ui", ".uix", ".ts", ".tsx", ".js", ".jsx", ".mjs"];
 
     for (const ext of extensions) {
       const withExt = resolved + ext;
-      const exists = await this.fileExists(withExt);
-      console.log(
-        `[SWITE] trying extension ${ext}: ${withExt}, exists: ${exists}`,
-      );
-      if (exists) {
-        const url = await this.toUrl(withExt);
-        console.log(`[SWITE] found with ${ext}: ${url}`);
-        return url;
+      if (await this.fileExists(withExt)) {
+        return await this.toUrl(withExt);
       }
     }
 

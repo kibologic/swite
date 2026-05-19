@@ -69,8 +69,6 @@ export class UIHandler extends BaseHandler {
       (compiled) => this.getDependencies(compiled),
     );
     if (cached) {
-      console.log(chalk.yellow(`[.ui] Cache hit for ${url}`));
-      console.log(chalk.yellow(`[.ui] Cached content starts with: ${cached.substring(0, 50).replace(/\n/g, "\\n")}`));
       // CRITICAL: Strip /swiss-lib/ paths from cached code too
       // Old cache entries may have /swiss-lib/ paths from before the fix
       if (cached.includes("/swiss-lib/")) {
@@ -89,8 +87,6 @@ export class UIHandler extends BaseHandler {
 
     // Cache miss - compile
     const source = await fs.readFile(filePath, "utf-8");
-    console.log(chalk.yellow(`[.ui] Compiling file: ${filePath}`));
-    console.log(chalk.yellow(`[.ui] Source starts with: ${source.substring(0, 50).replace(/\n/g, "\\n")}`));
     let compiled = await this.compiler.compileAsync(source, filePath);
 
     // Transform TypeScript output to plain JavaScript via esbuild
@@ -102,8 +98,6 @@ export class UIHandler extends BaseHandler {
       sourcefile: filePath,
     });
     compiled = tsResult.code;
-
-    console.log(chalk.yellow(`[.ui] Compiled result starts with: ${compiled.substring(0, 50).replace(/\n/g, "\\n")}`));
 
     // CRITICAL: Strip /swiss-lib/ paths from compiled output BEFORE import rewriting
     // The compiler may output /swiss-lib/ paths directly in the code
@@ -146,11 +140,7 @@ export class UIHandler extends BaseHandler {
     const bareImportPattern =
       /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/;
     if (bareImportPattern.test(compiled)) {
-      console.log(
-        chalk.yellow(
-          `[.ui] WARNING: Compiled code contains bare imports: ${url}`,
-        ),
-      );
+      console.warn(`[.ui] Compiled output contains bare imports: ${url}`);
     }
 
     const rewritten = await rewriteImports(
@@ -163,23 +153,10 @@ export class UIHandler extends BaseHandler {
     // This catches any paths that might have slipped through
     let finalCode = rewritten;
     if (finalCode.includes("/swiss-lib/")) {
-      const beforeFinal = finalCode;
-      const count = (beforeFinal.match(/\/swiss-lib\//g) || []).length;
-      console.log(chalk.red(`[.ui] 🚨 FINAL PASS TRIGGERED: Found ${count} /swiss-lib/ paths in ${url}`));
-      // Multiple passes to catch all variations
+      console.warn(`[.ui] /swiss-lib/ paths in output for ${url}, fixing`);
       finalCode = finalCode.replace(/\/swiss-lib\/packages\//g, "/swiss-packages/");
       finalCode = finalCode.replace(/\/swiss-lib\//g, "/swiss-packages/");
       finalCode = finalCode.replace(/(['"])\/swiss-lib\//g, '$1/swiss-packages/');
-      if (beforeFinal !== finalCode) {
-        const afterCount = (finalCode.match(/\/swiss-lib\//g) || []).length;
-        console.log(chalk.green(`[.ui] ✅ FINAL PASS: Fixed ${count} /swiss-lib/ paths (${afterCount} remaining) in ${url}`));
-        if (afterCount > 0) {
-          console.log(chalk.red(`[.ui] ❌ STILL HAS /swiss-lib/: ${finalCode.substring(0, 500)}`));
-        }
-      } else {
-        console.log(chalk.red(`[.ui] ❌ FINAL PASS FAILED: No changes made!`));
-        console.log(chalk.yellow(`[.ui] Sample: ${beforeFinal.substring(0, 200)}`));
-      }
     }
 
     // Store in cache
@@ -192,47 +169,20 @@ export class UIHandler extends BaseHandler {
 
     // Debug: Verify no bare imports remain after rewriting
     if (bareImportPattern.test(finalCode)) {
-      console.log(
-        chalk.red(
-          `[.ui] ERROR: Bare imports still present after rewriting: ${url}`,
-        ),
-      );
+      console.error(`[.ui] Bare imports still present after rewriting: ${url}`);
       const matches = Array.from(
         rewritten.matchAll(
           /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g,
         ),
       );
       for (const match of matches.slice(0, 3)) {
-        console.log(chalk.red(`[.ui] Unresolved import: ${match[1]}`));
+        console.error(`[.ui] Unresolved import: ${match[1]}`);
       }
     }
 
-    // Set headers BEFORE sending response
     setDevHeaders(res);
-    // Explicitly set Content-Type to ensure it's not overridden
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-
-    // Log the Content-Type being sent
-    console.log(chalk.green(`[.ui] Sending response with Content-Type: ${res.getHeader("Content-Type")}`));
-    console.log(chalk.green(`[.ui] Response body length: ${rewritten.length} chars`));
-    console.log(chalk.green(`[.ui] Response body preview: ${rewritten.substring(0, 100)}...`));
-
-    // Send response - use res.end() to ensure headers are final
-    // Double-check Content-Type one more time
-    const finalContentType = res.getHeader("Content-Type");
-    if (finalContentType !== "application/javascript; charset=utf-8") {
-      console.error(chalk.red(`[.ui] ⚠️  Content-Type is wrong before send! Expected: application/javascript, Got: ${finalContentType}`));
-      res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    }
-    console.log(chalk.green(`[.ui] Final Content-Type: ${res.getHeader("Content-Type")}`));
-    console.log(chalk.green(`[.ui] Sending ${finalCode.length} bytes of JavaScript`));
-
-    // Use res.end() instead of res.send() to have more control
     res.setHeader("Content-Length", Buffer.byteLength(finalCode, "utf-8"));
     res.end(finalCode, "utf-8");
-    // Ensure headersSent is set (should be set by res.end(), but verify)
-    if (!res.headersSent) {
-      console.error(chalk.red(`[.ui] ⚠️  res.end() called but headersSent is still false!`));
-    }
   }
 }

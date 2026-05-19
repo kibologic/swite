@@ -130,11 +130,7 @@ export class UIXHandler extends BaseHandler {
     const bareImportPattern =
       /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/;
     if (bareImportPattern.test(compiled)) {
-      console.log(
-        chalk.yellow(
-          `[.uix] WARNING: Compiled code contains bare imports: ${url}`,
-        ),
-      );
+      console.warn(`[.uix] Compiled output contains bare imports: ${url}`);
     }
 
     const rewritten = await rewriteImports(
@@ -166,18 +162,14 @@ export class UIXHandler extends BaseHandler {
 
     // Debug: Verify no bare imports remain after rewriting
     if (bareImportPattern.test(finalCode)) {
-      console.log(
-        chalk.red(
-          `[.uix] ERROR: Bare imports still present after rewriting: ${url}`,
-        ),
-      );
+      console.error(`[.uix] Bare imports still present after rewriting: ${url}`);
       const matches = Array.from(
         rewritten.matchAll(
           /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g,
         ),
       );
       for (const match of matches.slice(0, 3)) {
-        console.log(chalk.red(`[.uix] Unresolved import: ${match[1]}`));
+        console.error(`[.uix] Unresolved import: ${match[1]}`);
       }
     }
 
