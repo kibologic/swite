@@ -66,35 +66,22 @@ export async function resolveFilePath(
     return path.join(path.resolve(root), urlPath); // fallback; handler will 404
   }
 
-  // Check if this is a swiss-lib package file
+  // /swiss-packages/ URLs point to files in the co-located framework monorepo's packages/ dir
   if (url.startsWith("/swiss-packages/")) {
-    // Dynamically find swiss-lib monorepo instead of hardcoded paths
-    const swissLib = await findSwissLibMonorepo(root);
-    if (swissLib) {
-      // Remove /swiss-packages prefix and use the rest as relative path
-      const relativePath = url.replace(/^\/swiss-packages\//, "");
-      const swissPackagesPath = path.join(swissLib, "packages");
-      const fullPath = path.join(swissPackagesPath, relativePath);
-      
+    const relativePath = url.replace(/^\/swiss-packages\//, "");
+    const monorepo = await findSwissLibMonorepo(root);
+    if (monorepo) {
+      const fullPath = path.join(monorepo, "packages", relativePath);
       try {
         await fs.access(fullPath);
-        console.log(`[file-path-resolver] Found swiss-lib package at: ${fullPath}`);
         return fullPath;
       } catch {
-        console.warn(
-          `[file-path-resolver] swiss-lib package file not found: ${fullPath}`,
-        );
-        return fullPath; // Return path anyway, will error later if needed
+        return fullPath; // Return anyway; handler will 404 if missing
       }
-    } else {
-      // Fallback: construct path from root (may not work, but better than nothing)
-      const relativePath = url.replace(/^\/swiss-packages\//, "");
-      const fallbackPath = path.join(root, "..", "..", "..", "swiss-lib", "packages", relativePath);
-      console.warn(
-        `[file-path-resolver] swiss-lib not found, using fallback: ${fallbackPath}`,
-      );
-      return fallbackPath;
     }
+    // No co-located monorepo found — return a path that will 404 cleanly
+    console.warn(`[file-path-resolver] No framework monorepo found for /swiss-packages/${relativePath}`);
+    return path.join(root, "node_modules", relativePath);
   }
 
   // Workspace-level directories: always resolve from workspace root
