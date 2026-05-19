@@ -53,11 +53,12 @@ export class CompilationCache {
       return null;
     }
 
-    // Check if dependencies changed
+    // Check if dependencies changed (order-independent comparison)
     const currentDeps = await getDependencies(entry.compiled);
+    const prevSet = new Set(entry.dependencies);
     const depsChanged =
       currentDeps.length !== entry.dependencies.length ||
-      currentDeps.some((dep, i) => dep !== entry.dependencies[i]);
+      currentDeps.some((dep) => !prevSet.has(dep));
 
     if (depsChanged) {
       console.log(
