@@ -27,6 +27,7 @@ import {
 import { HMREngine } from "../hmr.js";
 import { findWorkspaceRoot } from "../utils/workspace.js";
 import { loadImportMap } from "../utils/generate-import-map.js";
+import { loadEnv } from "../env.js";
 
 export interface MiddlewareConfig {
   root: string;
@@ -106,11 +107,16 @@ export async function setupMiddleware(
     console.log(chalk.yellow(`[SWITE] No import map at ${importMapPath}, using runtime resolution`));
   }
 
+  // ── Load .env files for import.meta.env inlining ──────────────────────────
+  const mode = process.env.NODE_ENV === "production" ? "production" : "development";
+  const env = loadEnv(config.root, mode);
+
   // ── Create handlers ────────────────────────────────────────────────────────
   const handlerContext = {
     resolver: config.resolver,
     root: config.root,
     workspaceRoot,
+    env,
   };
 
   const uiHandler = new UIHandler(handlerContext);
