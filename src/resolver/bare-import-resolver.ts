@@ -68,56 +68,26 @@ export async function resolveBareImport(
     }
 
     if (!pkgJsonPath || !pkgDir) {
-      // EMERGENCY FIX: For @kibologic/* packages, try direct path first
-      if (pkgName.startsWith('@kibologic/')) {
-        const pkgShortName = pkgName.replace('@kibologic/', '');
-
-        // Try relative path from SWS to swiss-lib
-        const potentialPaths = [
-          path.join(context.root, '../swiss-lib/packages', pkgShortName),
-          path.join(context.root, '../../swiss-lib/packages', pkgShortName),
-          path.join(context.root, '../../../swiss-lib/packages', pkgShortName),
-        ];
-
-        for (const candidatePath of potentialPaths) {
-          const candidatePkgJson = path.join(candidatePath, 'package.json');
-          if (await context.fileExists(candidatePkgJson)) {
-            pkgDir = candidatePath;
-            pkgJsonPath = candidatePkgJson;
-            break;
-          }
-        }
-      }
-
-      // If still not found, try workspace resolver
-      if (!pkgJsonPath || !pkgDir) {
-        const workspacePkg = await context.resolveWorkspacePackage(pkgName);
-        if (workspacePkg) {
-          return await resolveWorkspacePackageEntry(
-            workspacePkg,
-            pkgName,
-            subPath,
-            specifier,
-            context,
-          );
-        }
-
-        // Last resort: CDN fallback
-        if (!shouldUseCdnFallback(pkgName)) {
-          // Scoped packages may be private and are not necessarily available on public npm CDNs.
-          console.warn(
-            `[SWITE] Package ${pkgName} not found anywhere. Scoped package detected; CDN fallback is disabled by default.`,
-          );
-          // Return a same-origin node_modules URL to make failures explicit and allow the
-          // node-module handler to try serving it.
-          return `/node_modules/${specifier}`;
-        }
-
-        console.warn(
-          `[SWITE] Package ${pkgName} not found anywhere, using CDN fallback`,
+      const workspacePkg = await context.resolveWorkspacePackage(pkgName);
+      if (workspacePkg) {
+        return await resolveWorkspacePackageEntry(
+          workspacePkg,
+          pkgName,
+          subPath,
+          specifier,
+          context,
         );
-        return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
       }
+
+      if (!shouldUseCdnFallback(pkgName)) {
+        console.warn(
+          `[SWITE] Package ${pkgName} not found anywhere. Scoped package detected; CDN fallback is disabled by default.`,
+        );
+        return `/node_modules/${specifier}`;
+      }
+
+      console.warn(`[SWITE] Package ${pkgName} not found anywhere, using CDN fallback`);
+      return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
     }
 
     // Continue with normal resolution if we found it

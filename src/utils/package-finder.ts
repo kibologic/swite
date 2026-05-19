@@ -18,62 +18,37 @@ export interface PackageLocation {
 }
 
 /**
- * Find swiss-lib monorepo by searching for swiss-lib/package.json or swiss-lib/packages/core
+ * Find a co-located framework monorepo by scanning sibling directories at each
+ * ancestor level for any workspace root (pnpm-workspace.yaml) that also has a
+ * packages/ directory. Works for any framework directory name.
  */
 export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
-  let current = startPath;
-  for (let i = 0; i < 20; i++) { // Search up to 20 levels
-    // Check for swiss-lib directory with packages/core
-    const swissLibPath = path.join(current, "swiss-lib");
-    const swissLibPackageJson = path.join(swissLibPath, "package.json");
-    const corePackage = path.join(swissLibPath, "packages", "core", "package.json");
-    
+  let current = path.resolve(startPath);
+
+  for (let i = 0; i < 20; i++) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+
+    // Scan siblings of `current` at this parent level
     try {
-      // Check if swiss-lib exists and has core package
-      if (await fileExists(swissLibPackageJson) || await fileExists(corePackage)) {
-        console.log(`[package-finder] Found swiss-lib at: ${swissLibPath}`);
-        return swissLibPath;
-      }
-    } catch {
-      // Continue searching
-    }
-    
-    // Also check for legacy SWISS directory
-    const swissPath = path.join(current, "SWISS");
-    const swissPackageJson = path.join(swissPath, "package.json");
-    const swissCorePackage = path.join(swissPath, "packages", "core", "package.json");
-    
-    try {
-      if (await fileExists(swissPackageJson) || await fileExists(swissCorePackage)) {
-        console.log(`[package-finder] Found legacy SWISS at: ${swissPath}`);
-        return swissPath;
-      }
-    } catch {
-      // Continue searching
-    }
-    
-    // Scan immediate subdirectories of `current` for a swiss-lib/ child
-    try {
-      const entries = await fs.readdir(current, { withFileTypes: true });
-      const subdirs = entries.filter(
-        (e) => e.name !== "node_modules" && (e.isDirectory() || e.isSymbolicLink())
-      );
-      for (const entry of subdirs) {
-        const sub = path.join(current, entry.name);
-        const subSwissLib = path.join(sub, "swiss-lib");
-        const subPkgJson = path.join(subSwissLib, "package.json");
-        const subCorePkgJson = path.join(subSwissLib, "packages", "core", "package.json");
-        if (await fileExists(subPkgJson) || await fileExists(subCorePkgJson)) {
-          console.log(`[package-finder] Found swiss-lib via subdir scan at: ${subSwissLib}`);
-          return subSwissLib;
+      const entries = await fs.readdir(parent, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name === "node_modules") continue;
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+        const sibling = path.join(parent, entry.name);
+        if (path.resolve(sibling) === path.resolve(current)) continue; // skip self
+
+        if (
+          await fileExists(path.join(sibling, "pnpm-workspace.yaml")) &&
+          await fileExists(path.join(sibling, "packages"))
+        ) {
+          return sibling;
         }
       }
     } catch {
       // Skip on permission errors
     }
 
-    const parent = path.dirname(current);
-    if (parent === current) break;
     current = parent;
   }
 
@@ -105,18 +80,18 @@ export async function findPackage(
     }
   }
   
-  // 3. Check swiss-lib monorepo (for @kibologic/* packages)
-  if (packageName.startsWith("@kibologic/")) {
-    const swissLib = await findSwissLibMonorepo(startPath);
-    if (swissLib) {
-      const packageDir = packageName.replace("@kibologic/", "");
-      const swissPackage = path.join(swissLib, "packages", packageDir);
-      if (await fileExists(path.join(swissPackage, "package.json"))) {
-        return { path: swissPackage, type: 'swiss-lib' };
+  // 3. Check co-located framework monorepo packages/ for any scoped package
+  if (packageName.startsWith("@")) {
+    const monorepo = await findSwissLibMonorepo(startPath);
+    if (monorepo) {
+      const shortName = packageName.split("/")[1];
+      const monorepoPackage = path.join(monorepo, "packages", shortName);
+      if (await fileExists(path.join(monorepoPackage, "package.json"))) {
+        return { path: monorepoPackage, type: 'swiss-lib' };
       }
     }
   }
-  
+
   // 4. Check workspace packages (lib/, packages/, modules/)
   if (workspaceRoot) {
     const packageDirs = ["lib", "packages", "modules", "libraries", "apps"];
