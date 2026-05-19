@@ -25,13 +25,13 @@
   ],
   "references": [
     {
-      "path": "../swiss-lib/packages/core"
+      "path": "../swiss-lib/runtime"
     },
     {
-      "path": "../swiss-lib/packages/compiler"
+      "path": "../swiss-lib/compiler"
     },
     {
-      "path": "../swiss-lib/packages/plugins/file-router"
+      "path": "../swiss-lib/plugins/file-router"
     }
   ]
 }
