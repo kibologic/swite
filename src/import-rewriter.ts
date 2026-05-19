@@ -1,11 +1,18 @@
 /*
  * Import Rewriter for SWITE
  *
- * SIMPLIFIED APPROACH:
- * - es-module-lexer ONLY returns static import specifiers (string literals)
- * - If es-module-lexer found it, it's ALWAYS an import, never a variable
- * - Trust the lexer and rewrite everything it finds (except relative imports)
- * - Let the resolver handle resolution, fallback to CDN if needed
+ * Design: collect-then-apply-right-to-left
+ *
+ * es-module-lexer gives positions {s, e} in the ORIGINAL string. The previous
+ * implementation tracked a running `offset` as replacements were applied, which
+ * accumulated errors when quote handling changed string lengths in unexpected
+ * ways and required three layers of fallback replacement logic.
+ *
+ * Instead we now:
+ *  1. Collect every replacement as {start, end, text} in original-string coordinates
+ *  2. Sort descending by start position
+ *  3. Apply right-to-left — each substitution cannot shift the position of any
+ *     replacement to its left, so no offset tracking is needed at all.
  */
 
 import { init, parse } from "es-module-lexer";
@@ -14,6 +21,12 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
 import { shouldUseCdnFallback } from "./utils/cdn-fallback.js";
+
+interface Replacement {
+  start: number;
+  end: number;
+  text: string;
+}
 
 export async function rewriteImports(
   code: string,
@@ -24,261 +37,100 @@ export async function rewriteImports(
 
   try {
     const [imports] = parse(code);
-
     if (imports.length === 0) return code;
 
-    let rewritten = code;
-    let offset = 0;
+    const replacements: Replacement[] = [];
 
     for (const imp of imports) {
-      let { s: start, e: end } = imp;
-      const specifier = code.slice(start, end);
+      const { s: rawStart, e: rawEnd } = imp;
+      const rawSpecifier = code.slice(rawStart, rawEnd);
 
-      // Skip CSS imports - handled as static assets, not modules
-      if (specifier.includes(".css")) continue;
+      // Skip CSS imports — handled as static assets
+      if (rawSpecifier.includes(".css")) continue;
 
-      // Extract quote character and actual specifier
-      const firstChar = specifier[0];
-      const lastChar = specifier[specifier.length - 1];
-      const hasQuotes =
-        (firstChar === '"' || firstChar === "'") && firstChar === lastChar;
+      // Determine actual specifier string and the span in `code` that includes quotes
+      const { specifier, start, end } = resolveQuotedSpan(code, rawSpecifier, rawStart, rawEnd);
+      if (specifier === null) continue;
 
-      let actualSpecifier: string;
-      let quoteChar: string | null = null;
-
-      if (hasQuotes) {
-        actualSpecifier = specifier.slice(1, -1);
-        quoteChar = firstChar;
-      } else {
-        // Unquoted - check surrounding code for quotes
-        const codeBefore = code.slice(Math.max(0, start - 1), start);
-        const codeAfter = code.slice(end, Math.min(code.length, end + 1));
-        if (
-          (codeBefore === '"' || codeBefore === "'") &&
-          codeBefore === codeAfter
-        ) {
-          quoteChar = codeBefore;
-          actualSpecifier = specifier;
-          start = start - 1;
-          end = end + 1;
-        } else {
-          const escapedSpecifier = specifier.replace(
-            /[.*+?^${}()|[\]\\-]/g,
-            "\\$&",
-          );
-          const quotedPattern = new RegExp(`(['"])${escapedSpecifier}\\1`);
-          const match = quotedPattern.exec(code);
-          if (match) {
-            quoteChar = match[1];
-            actualSpecifier = specifier;
-            start = match.index!;
-            end = match.index! + match[0].length;
-          } else {
-            console.warn(
-              `[SWITE] import-rewriter: Could not find quotes for specifier: ${specifier}`,
-            );
-            continue;
-          }
-        }
-      }
-
-      // Fix compiler bug where .uix/.ui imports are changed to .js or .tsx
+      // Fix compiler bug: .uix/.ui imports emitted as .js or .tsx
       if (
-        actualSpecifier.startsWith(".") &&
-        (actualSpecifier.endsWith(".js") || actualSpecifier.endsWith(".tsx")) &&
-        !actualSpecifier.includes("node_modules")
+        specifier.startsWith(".") &&
+        (specifier.endsWith(".js") || specifier.endsWith(".tsx")) &&
+        !specifier.includes("node_modules")
       ) {
-        const normalizedImporter = importer.replace(/\\/g, "/");
-        const isSwissPackage = normalizedImporter.includes("/swiss-packages/");
-        const isLibPath = normalizedImporter.includes("/lib/");
-        const isUixFile =
-          normalizedImporter.endsWith(".uix") || normalizedImporter.endsWith(".ui");
-
-        let newExtension: string;
-        if (isSwissPackage) {
-          newExtension = ".ts";
-        } else if (isLibPath) {
-          newExtension = ".ts";
-        } else if (isUixFile) {
-          const baseSpecifier = actualSpecifier.endsWith(".tsx")
-            ? actualSpecifier.slice(0, -4)
-            : actualSpecifier.slice(0, -3);
-          const currentDir = path.dirname(importer);
-          const cleanImportPath = baseSpecifier.startsWith("./")
-            ? baseSpecifier.slice(2)
-            : baseSpecifier;
-          const absoluteUiPath = path.resolve(currentDir, cleanImportPath + ".ui");
-          const absoluteUixPath = path.resolve(currentDir, cleanImportPath + ".uix");
-
-          try {
-            await fs.access(absoluteUiPath);
-            newExtension = ".ui";
-          } catch {
-            try {
-              await fs.access(absoluteUixPath);
-              newExtension = ".uix";
-            } catch {
-              newExtension = ".ui";
-            }
-          }
-        } else {
-          newExtension = ".ts";
+        const newExt = await resolveExtensionFix(specifier, importer);
+        if (newExt) {
+          const base = specifier.endsWith(".tsx") ? specifier.slice(0, -4) : specifier.slice(0, -3);
+          replacements.push({ start, end, text: `"${base}${newExt}"` });
+          continue;
         }
+      }
 
-        const baseSpecifier = actualSpecifier.endsWith(".tsx")
-          ? actualSpecifier.slice(0, -4)
-          : actualSpecifier.slice(0, -3);
-        const newSpecifier = baseSpecifier + newExtension;
+      // Skip relative and absolute path imports (already resolved)
+      if (specifier.startsWith(".") || specifier.startsWith("/")) continue;
 
-        const originalLength = end - start;
-        const before = rewritten.slice(0, start + offset);
-        const after = rewritten.slice(end + offset);
-        const finalSpecifier = quoteChar
-          ? quoteChar + newSpecifier + quoteChar
-          : `"${newSpecifier}"`;
-        rewritten = before + finalSpecifier + after;
-        offset += finalSpecifier.length - originalLength;
+      if (!/^[@a-zA-Z]/.test(specifier)) {
+        console.warn(`[SWITE] import-rewriter: Invalid specifier format: ${specifier}`);
         continue;
       }
 
-      // Convert /swiss-lib/ paths to /swiss-packages/
-      if (actualSpecifier.includes("/swiss-lib/")) {
-        const converted = actualSpecifier.replace(
-          /\/swiss-lib\/packages\//g,
-          "/swiss-packages/",
-        );
-        const originalLength = end - start;
-        const before = rewritten.slice(0, start + offset);
-        const after = rewritten.slice(end + offset);
-        const finalSpecifier = quoteChar
-          ? quoteChar + converted + quoteChar
-          : `"${converted}"`;
-        rewritten = before + finalSpecifier + after;
-        offset += finalSpecifier.length - originalLength;
-        continue;
-      }
-
-      // Skip relative and absolute path imports
-      if (actualSpecifier.startsWith(".") || actualSpecifier.startsWith("/")) {
-        continue;
-      }
-
-      if (!/^[@a-zA-Z]/.test(actualSpecifier)) {
-        console.warn(
-          `[SWITE] import-rewriter: Invalid specifier format: ${actualSpecifier}`,
-        );
-        continue;
-      }
-
-      // Resolve the bare import
+      // Resolve bare import
       let resolved: string;
       try {
-        resolved = await resolver.resolve(actualSpecifier, importer);
-
-        if (
-          !resolved ||
-          resolved === actualSpecifier ||
-          (!resolved.startsWith("/") && !resolved.startsWith("http"))
-        ) {
-          console.warn(
-            chalk.yellow(
-              `[SWITE] import-rewriter: Resolver returned invalid result for ${actualSpecifier}, using CDN fallback`,
-            ),
-          );
-          resolved = shouldUseCdnFallback(actualSpecifier)
-            ? `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`
-            : `/node_modules/${actualSpecifier}`;
+        resolved = await resolver.resolve(specifier, importer);
+        if (!resolved || resolved === specifier || (!resolved.startsWith("/") && !resolved.startsWith("http"))) {
+          console.warn(chalk.yellow(`[SWITE] import-rewriter: Resolver returned invalid result for ${specifier}, using CDN fallback`));
+          resolved = shouldUseCdnFallback(specifier)
+            ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
+            : `/node_modules/${specifier}`;
         }
       } catch (error) {
-        console.error(
-          chalk.red(`[SWITE] import-rewriter: Error resolving ${actualSpecifier}:`),
-          error,
-        );
-        resolved = shouldUseCdnFallback(actualSpecifier)
-          ? `https://cdn.jsdelivr.net/npm/${actualSpecifier}/+esm`
-          : `/node_modules/${actualSpecifier}`;
+        console.error(chalk.red(`[SWITE] import-rewriter: Error resolving ${specifier}:`), error);
+        resolved = shouldUseCdnFallback(specifier)
+          ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
+          : `/node_modules/${specifier}`;
       }
 
-      // Prefer src/ over dist/ for SWISS and workspace packages in development
-      if (resolved.includes("/dist/")) {
-        const isSwissOrPackages =
-          resolved.includes("/swiss-packages/") ||
-          resolved.includes("/packages/");
-        if (isSwissOrPackages) {
-          resolved = resolved.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
-        }
+      // Prefer src/ over dist/ for workspace/swiss packages in dev
+      if (resolved.includes("/dist/") && (resolved.includes("/swiss-packages/") || resolved.includes("/packages/"))) {
+        resolved = resolved.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
       }
 
-      // Replace the specifier in the output
-      if (quoteChar) {
-        const originalLength = end - start;
-        const before = rewritten.slice(0, start + offset);
-        const after = rewritten.slice(end + offset);
-        const finalResolved = quoteChar + resolved + quoteChar;
-        rewritten = before + finalResolved + after;
-        offset += finalResolved.length - originalLength;
-      } else {
-        const before = rewritten.slice(0, start + offset);
-        const after = rewritten.slice(end + offset);
-        const finalResolved = `"${resolved}"`;
-        rewritten = before + finalResolved + after;
-        offset += finalResolved.length - (end - start);
-      }
+      replacements.push({ start, end, text: `"${resolved}"` });
+    }
 
-      // Verify the replacement worked; force it as a last resort
-      if (rewritten.includes(actualSpecifier) && !rewritten.includes(resolved)) {
-        console.error(
-          chalk.red(
-            `[SWITE] import-rewriter: Replacement failed for "${actualSpecifier}", forcing...`,
-          ),
-        );
-        rewritten = rewritten.replace(
-          new RegExp(actualSpecifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-          resolved,
+    // Apply right-to-left so earlier positions are never shifted by later replacements
+    replacements.sort((a, b) => b.start - a.start);
+    let result = code;
+    for (const { start, end, text } of replacements) {
+      result = result.slice(0, start) + text + result.slice(end);
+    }
+
+    // Safety net: catch any bare scoped imports the lexer may have missed
+    const barePattern = /(?:import|from|export)\s+['"](@[^'"]+\/[^'"]+)[^'"]*['"]/g;
+    for (const match of Array.from(result.matchAll(barePattern))) {
+      const bareImport = match[1];
+      if (!bareImport.startsWith("/") && !bareImport.startsWith("http") && !bareImport.startsWith(".")) {
+        console.error(chalk.red(`[SWITE] import-rewriter: CRITICAL — bare import "${bareImport}" still present after rewriting`));
+        const replacement = shouldUseCdnFallback(bareImport)
+          ? `https://cdn.jsdelivr.net/npm/${bareImport}/+esm`
+          : `/node_modules/${bareImport}`;
+        result = result.replace(
+          new RegExp(bareImport.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+          replacement,
         );
       }
     }
 
-    // Final check: force-replace any remaining bare imports
-    const bareImportPattern =
-      /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)[^'"]*['"]/;
-    if (bareImportPattern.test(rewritten)) {
-      for (const match of Array.from(rewritten.matchAll(bareImportPattern))) {
-        const bareImport = match[1];
-        if (
-          !bareImport.startsWith("/") &&
-          !bareImport.startsWith("http") &&
-          !bareImport.startsWith(".")
-        ) {
-          console.error(
-            chalk.red(
-              `[SWITE] import-rewriter: CRITICAL — bare import "${bareImport}" still present after rewriting`,
-            ),
-          );
-          const replacement = shouldUseCdnFallback(bareImport)
-            ? `https://cdn.jsdelivr.net/npm/${bareImport}/+esm`
-            : `/node_modules/${bareImport}`;
-          rewritten = rewritten.replace(
-            new RegExp(bareImport.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-            replacement,
-          );
-        }
-      }
-    }
-
-    // Regex-based fallback: fix remaining relative .js/.tsx imports the lexer may have missed
+    // Regex fallback: fix relative .js/.tsx extension mismatches the lexer may have missed
     const normalizedImporter = importer.replace(/\\/g, "/");
     const isSwissPackage = normalizedImporter.includes("/swiss-packages/");
-    const isUixFile =
-      normalizedImporter.endsWith(".uix") || normalizedImporter.endsWith(".ui");
-    const relativeJsImportRegex = /from\s+(["'])(\.\.?\/[^"']*?)(\.js|\.tsx)(\1)/g;
+    const isUixFile = normalizedImporter.endsWith(".uix") || normalizedImporter.endsWith(".ui");
 
-    rewritten = rewritten.replace(
-      relativeJsImportRegex,
-      (match, quote, importPath, _jsExt, endQuote) => {
-        if (importPath.includes("node_modules") || !importPath.startsWith(".")) {
-          return match;
-        }
+    result = result.replace(
+      /from\s+(["'])(\.\.?\/[^"']*?)(\.js|\.tsx)(\1)/g,
+      (match, quote, importPath, _ext, endQuote) => {
+        if (importPath.includes("node_modules") || !importPath.startsWith(".")) return match;
         const isLibPath = normalizedImporter.includes("/lib/");
         let newExt: string;
         if (isSwissPackage || isLibPath) {
@@ -292,19 +144,94 @@ export async function rewriteImports(
       },
     );
 
-    // Final pass: convert any remaining /swiss-lib/ paths
-    if (rewritten.includes("/swiss-lib/")) {
-      rewritten = rewritten.replace(/\/swiss-lib\/packages\//g, "/swiss-packages/");
-      rewritten = rewritten.replace(/\/swiss-lib\//g, "/swiss-packages/");
-      rewritten = rewritten.replace(/(['"])\/swiss-lib\//g, "$1/swiss-packages/");
-    }
-
-    return rewritten;
+    return result;
   } catch (error) {
-    console.error(
-      chalk.red(`[SWITE] import-rewriter: Error rewriting imports in ${importer}:`),
-      error,
-    );
-    return code; // Return original on error
+    console.error(chalk.red(`[SWITE] import-rewriter: Error rewriting imports in ${importer}:`), error);
+    return code;
   }
+}
+
+/**
+ * Given a raw specifier token from es-module-lexer, find the full quoted span
+ * in `code` (including the surrounding quote characters) and extract the clean
+ * specifier string. Returns `{specifier: null}` when the span cannot be found.
+ */
+function resolveQuotedSpan(
+  code: string,
+  rawSpecifier: string,
+  rawStart: number,
+  rawEnd: number,
+): { specifier: string | null; start: number; end: number } {
+  const first = rawSpecifier[0];
+  const last = rawSpecifier[rawSpecifier.length - 1];
+
+  // Case 1: lexer returned the specifier WITH surrounding quotes
+  if ((first === '"' || first === "'") && first === last) {
+    return {
+      specifier: rawSpecifier.slice(1, -1),
+      start: rawStart,
+      end: rawEnd,
+    };
+  }
+
+  // Case 2: lexer returned the bare specifier; look one char back/forward for quotes
+  const charBefore = rawStart > 0 ? code[rawStart - 1] : "";
+  const charAfter = rawEnd < code.length ? code[rawEnd] : "";
+  if ((charBefore === '"' || charBefore === "'") && charBefore === charAfter) {
+    return {
+      specifier: rawSpecifier,
+      start: rawStart - 1,
+      end: rawEnd + 1,
+    };
+  }
+
+  // Case 3: search nearby for a quoted pattern
+  const escaped = rawSpecifier.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+  const pattern = new RegExp(`(['"])${escaped}\\1`);
+  const match = pattern.exec(code);
+  if (match) {
+    return {
+      specifier: rawSpecifier,
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+  }
+
+  console.warn(`[SWITE] import-rewriter: Could not find quotes for specifier: ${rawSpecifier}`);
+  return { specifier: null, start: rawStart, end: rawEnd };
+}
+
+/**
+ * Determine what extension a .js/.tsx import should be rewritten to,
+ * based on the importer's context and the actual files present on disk.
+ * Returns null when no rewrite is needed.
+ */
+async function resolveExtensionFix(specifier: string, importer: string): Promise<string | null> {
+  const normalizedImporter = importer.replace(/\\/g, "/");
+  const isSwissPackage = normalizedImporter.includes("/swiss-packages/");
+  const isLibPath = normalizedImporter.includes("/lib/");
+  const isUixFile = normalizedImporter.endsWith(".uix") || normalizedImporter.endsWith(".ui");
+
+  if (isSwissPackage || isLibPath) return ".ts";
+
+  if (isUixFile) {
+    const base = specifier.endsWith(".tsx") ? specifier.slice(0, -4) : specifier.slice(0, -3);
+    const currentDir = path.dirname(importer);
+    const cleanPath = base.startsWith("./") ? base.slice(2) : base;
+    const uiPath = path.resolve(currentDir, cleanPath + ".ui");
+    const uixPath = path.resolve(currentDir, cleanPath + ".uix");
+    try {
+      await fs.access(uiPath);
+      return ".ui";
+    } catch {
+      try {
+        await fs.access(uixPath);
+        return ".uix";
+      } catch {
+        return ".ui";
+      }
+    }
+  }
+
+  return ".ts";
 }
