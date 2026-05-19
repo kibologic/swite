@@ -374,12 +374,9 @@ export class SwiteBuilder {
     const absWorkingDir = workspaceRoot || this.config.root;
     // const aliases = workspaceRoot ? await this.createAliases(workspaceRoot, tempDir) : {}; // Unused
 
-    // Mark Node.js built-ins and build-time-only deps as external
+    // Mark Node.js built-ins as external; user-facing framework packages are
+    // resolved at runtime — do not hardcode package scopes here
     const nodeBuiltins = [
-      "@kibologic/swite",
-      "@kibologic/core",
-      "@kibologic/*",
-      "@kibologic/*",
       "fs",
       "path",
       "os",
