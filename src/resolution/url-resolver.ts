@@ -97,7 +97,7 @@ export async function toUrl(
     // Only prefer src over dist for workspace packages — never for node_modules
     if (normalized.includes("/dist/") && !normalized.includes("/src/") && !normalized.includes("/node_modules/")) {
       const srcPath = normalized.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
-      const { resolveFilePath } = await import("../path/file-path-resolver.js");
+      const { resolveFilePath } = await import("./path/file-path-resolver.js");
       const workspaceRoot = await context.getWorkspaceRoot();
       const srcFilePath = await resolveFilePath(srcPath, context.root, workspaceRoot);
       if (await context.fileExists(srcFilePath)) {
