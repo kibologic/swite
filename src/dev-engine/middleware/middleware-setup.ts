@@ -118,6 +118,7 @@ export async function setupMiddleware(
     root: config.root,
     workspaceRoot,
     env,
+    userConfig: config.userConfig,
   };
 
   const uiHandler = new UIHandler(handlerContext);
@@ -342,6 +343,7 @@ export async function setupMiddleware(
   await setupSPAFallback(app, {
     root: config.root,
     publicDir: config.publicDir,
+    entry: config.userConfig?.entry,
   });
 
   return {
