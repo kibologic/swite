@@ -1,6 +1,6 @@
 {
   "name": "@swissjs/swite",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "SWITE - SWISS Development Server (Vite replacement)",
   "type": "module",
   "main": "dist/index.js",
@@ -19,8 +19,8 @@
     "release:publish": "changeset publish"
   },
   "dependencies": {
-    "@swissjs/core": "0.1.5",
-    "@swissjs/compiler": "0.1.4",
+    "@swissjs/core": "0.1.8",
+    "@swissjs/compiler": "0.1.5",
     "@swissjs/plugin-file-router": "1.0.2",
     "chalk": "^5.3.0",
     "chokidar": "^3.5.3",

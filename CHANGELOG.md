@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.2
+
+### Patch Changes
+
+- Generalize resolution system and add internalScopes support
+
+  - Add `findSiblingRepository(startPath, repoName)` — replaces hardcoded swiss-lib discovery with a generic sibling repo finder. `findSwissLibMonorepo` preserved as a backward-compat wrapper.
+  - Add `findPackage` with local-first dev precedence — in development, resolves `@scoped/*` packages from local sibling source trees before falling back to `node_modules`.
+  - `internalScopes` from `swiss.config.ts` now flows through to all handlers at startup — prevents internal-scoped packages from being routed to jsDelivr CDN.
+  - `NodeModuleHandler` rewritten to use `findPackage` — replaces verbose walk-up/swiss-lib fallback chain with unified local-first resolver. Adds dist→src redirect for local sibling packages.
+  - CDN blacklist: packages matching `internalScopes` are blocked from jsDelivr fallback with a clear error log.
+  - Fix `cli.ts` builder import path (`./build-engine/builder.js`).
+  - Fix `url-resolver.ts` dynamic import path for `file-path-resolver`.
+  - Update peer deps: `@swissjs/core` → `0.1.8`, `@swissjs/compiler` → `0.1.5`.
+
 ## 0.2.31
 
 ### Patch Changes
