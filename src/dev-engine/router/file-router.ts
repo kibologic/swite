@@ -11,7 +11,6 @@ import type { RouteDefinition } from "@swissjs/core";
 import { RouteScanner } from "@swissjs/plugin-file-router/core";
 import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
 import { HMREngine } from "../hmr/hmr.js";
-import { findWorkspaceRoot } from "../../kernel/workspace.js";
 
 export interface FileRouterConfig {
   root: string;
@@ -38,7 +37,6 @@ export async function setupFileRouter(
   };
 
   try {
-    const workspaceRoot = await findWorkspaceRoot(config.root);
     const appRoot = config.root;
 
     // Initialize route scanner
@@ -49,57 +47,16 @@ export async function setupFileRouter(
       lazyLoading: true,
     });
 
-          // Scan routes from multiple locations:
-          // 1. App's pages directory (apps/alpine/src/pages)
-          // 2. SKLTN's pages directory (framework/skltn/src/pages) - for reusable auth pages
     const routesToScan: string[] = [];
 
-    // App pages
+    // App pages directory
     const appPagesDir = path.join(appRoot, "src", "pages");
     try {
       await fs.access(appPagesDir);
       routesToScan.push(appPagesDir);
-      console.log(chalk.gray(`  📄 Scanning app routes from ${appPagesDir}`));
+      console.log(chalk.gray(`  Scanning app routes from ${appPagesDir}`));
     } catch {
       // pages directory doesn't exist, skip
-    }
-
-    // SKLTN pages (if workspace root exists)
-    if (workspaceRoot && workspaceRoot !== appRoot) {
-      // Try framework/skltn first (new location), then fallback to lib/skltn (legacy)
-      const skltnPagesDir = path.join(
-        workspaceRoot,
-        "framework",
-        "skltn",
-        "src",
-        "pages",
-      );
-      const legacySkltnPagesDir = path.join(
-        workspaceRoot,
-        "lib",
-        "skltn",
-        "src",
-        "pages",
-      );
-      
-      try {
-        await fs.access(skltnPagesDir);
-        routesToScan.push(skltnPagesDir);
-        console.log(
-          chalk.gray(`  📄 Scanning SKLTN routes from ${skltnPagesDir}`),
-        );
-      } catch {
-        // Try legacy location
-        try {
-          await fs.access(legacySkltnPagesDir);
-          routesToScan.push(legacySkltnPagesDir);
-          console.log(
-            chalk.gray(`  📄 Scanning SKLTN routes from ${legacySkltnPagesDir} (legacy)`),
-          );
-        } catch {
-          // pages directory doesn't exist, skip
-        }
-      }
     }
 
     // Scan all route directories

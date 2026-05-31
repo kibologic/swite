@@ -38,11 +38,6 @@ export interface SwiteUserConfig {
    */
   entry?: string;
   /**
-   * Module aliases resolved during bare import resolution.
-   * e.g. { "@/": "src/" } maps @/ imports to the src/ directory.
-   */
-  aliases?: Record<string, string>;
-  /**
    * Glob patterns to exclude from HMR watching in addition to the defaults
    * (node_modules, .git, dist). Useful for generated files or large assets.
    */

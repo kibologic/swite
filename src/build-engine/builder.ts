@@ -56,9 +56,9 @@ export class SwiteBuilder {
       await this.copyPublicAssets();
 
       const duration = Date.now() - startTime;
-      console.log(chalk.green(`\n✅ Build completed in ${duration}ms\n`));
+      console.log(chalk.green(`\n[OK] Build completed in ${duration}ms\n`));
     } catch (error) {
-      console.error(chalk.red("\n❌ Build failed:"), error);
+      console.error(chalk.red("\n[FAIL] Build failed:"), error);
       throw error;
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
@@ -66,13 +66,13 @@ export class SwiteBuilder {
   }
 
   private async cleanOutputDir(): Promise<void> {
-    console.log(chalk.blue("🧹 Cleaning output directory..."));
+    console.log(chalk.blue("[clean] Cleaning output directory..."));
     await fs.rm(this.config.outDir, { recursive: true, force: true });
     await fs.mkdir(this.config.outDir, { recursive: true });
   }
 
   private async compileSwissFiles(tempDir: string): Promise<void> {
-    console.log(chalk.blue("🔨 Compiling Swiss files..."));
+    console.log(chalk.blue("[compile] Compiling Swiss files..."));
     await fs.mkdir(tempDir, { recursive: true });
 
     const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
@@ -90,7 +90,7 @@ export class SwiteBuilder {
     // Step 2: Discover and compile workspace dependencies
     const workspaceDeps = await this.discoverWorkspaceDependencies();
     for (const dep of workspaceDeps) {
-      console.log(chalk.blue(`📦 Compiling dependency: ${dep.name}`));
+      console.log(chalk.blue(`[bundle] Compiling dependency: ${dep.name}`));
       // Preserve workspace structure: libraries/skltn/src or packages/cart/src or modules/cart/src
       const depRelativeToWorkspace = workspaceRoot
         ? path.relative(workspaceRoot, dep.pkgDir)
@@ -269,7 +269,7 @@ export class SwiteBuilder {
                     pkgDir,
                   });
                   console.log(
-                    chalk.gray(`  📦 Found workspace dependency: ${depName}`),
+                    chalk.gray(`  [dep] Found workspace dependency: ${depName}`),
                   );
                   break;
                 }
@@ -315,7 +315,7 @@ export class SwiteBuilder {
                 });
                 console.log(
                   chalk.gray(
-                    `  📦 Discovered transitive dependency: ${pkgName}`,
+                    `  [dep] Discovered transitive dependency: ${pkgName}`,
                   ),
                 );
                 break;
@@ -325,14 +325,14 @@ export class SwiteBuilder {
         }
       }
     } catch (error) {
-      console.warn(chalk.yellow("⚠️  Could not discover dependencies:"), error);
+      console.warn(chalk.yellow("[warn] Could not discover dependencies:"), error);
     }
 
     return deps;
   }
 
   private async bundle(tempDir: string): Promise<void> {
-    console.log(chalk.blue("📦 Bundling with esbuild..."));
+    console.log(chalk.blue("[bundle] Bundling with esbuild..."));
 
     const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
     const appRelativeToWorkspace = workspaceRoot
