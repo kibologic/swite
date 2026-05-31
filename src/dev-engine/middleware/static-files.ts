@@ -15,6 +15,8 @@ export interface StaticFilesConfig {
   root: string;
   publicDir: string;
   workspaceRoot?: string | null;
+  /** Entry file for CSS extraction, relative to root. Defaults to "src/index.ui". */
+  entry?: string;
 }
 
 /**
@@ -549,7 +551,8 @@ export async function setupSPAFallback(
     console.log(chalk.magenta(`[SWITE CSS] ========== CSS EXTRACTION START (VERSION 3.0.0) ==========`));
     console.log(chalk.magenta(`[SWITE CSS] App root: ${config.root}`));
     try {
-      const entryPointPath = path.join(config.root, "src", "index.ui");
+      const entryFile = config.entry ?? "src/index.ui";
+      const entryPointPath = path.join(config.root, entryFile);
       console.log(chalk.blue(`[SWITE CSS] Checking entry point: ${entryPointPath}`));
       const entryPointContent = await fs.readFile(entryPointPath, "utf-8");
       

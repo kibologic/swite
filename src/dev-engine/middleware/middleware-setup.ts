@@ -343,6 +343,7 @@ export async function setupMiddleware(
   await setupSPAFallback(app, {
     root: config.root,
     publicDir: config.publicDir,
+    entry: config.userConfig?.entry,
   });
 
   return {
