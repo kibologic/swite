@@ -7,11 +7,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
-import { findSwissLibMonorepo } from "../../kernel/package-finder.js";
+import { findSwissLibMonorepo, findPackage } from "../../kernel/package-finder.js";
 
 export interface PathResolverContext {
   root: string;
   workspaceRoot: string | null;
+  userConfig?: any; // SwiteUserConfig
 }
 
 /**
@@ -21,15 +22,52 @@ export async function resolveFilePath(
   url: string,
   root: string,
   workspaceRoot: string | null = null,
+  userConfig?: any
 ): Promise<string> {
+  // Consolidate workspace root discovery for consistency across resolution blocks
+  const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
+
   // /node_modules/ URLs: walk up from app root until we find the package.
   // pnpm may place deps at the app root, one level up (workspace pkg), or at
   // the monorepo root depending on hoisting config and pnpm version.
   if (url.startsWith("/node_modules/")) {
     const urlPath = url.startsWith("/") ? url.slice(1) : url;
+    const parts = urlPath.split("/");
+    // Handle @scoped/package or standard-package
+    const packageName = parts[1].startsWith("@") ? `${parts[1]}/${parts[2]}` : parts[1];
+      // NEW: PNPM-aware Interceptor. Check if this request is for an "internal" scope package.
+      // In development, we always prioritize local siblings if they exist.
+      const internalScopes = userConfig?.internalScopes || [];
+      const match = internalScopes.length > 0 
+        ? url.match(new RegExp(`(${internalScopes.join("|")})\/([^/]+)`))
+        : null;
 
-    // Walk up the directory tree from root, trying node_modules at each level
-    let current = path.resolve(root);
+      if (process.env.NODE_ENV !== 'production' && match) {
+        const packageName = match[0];
+        const remainingPath = url.split(match[0])[1];
+
+        const localLoc = await findPackage(packageName, root, wsRoot);
+        if (localLoc && localLoc.type !== 'node_modules') {
+          // Found local source! Redirect the base path
+          const fullPath = path.join(localLoc.path, remainingPath);
+          
+          // Re-use workspace fallback logic for dist -> src transition
+          if (fullPath.includes("/dist/")) {
+            const srcPath = fullPath.replace("/dist/", "/src/").replace(/\.[mc]?js$/, ".ts");
+            try {
+              await fs.access(srcPath);
+              console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local src: ${srcPath}`);
+              return srcPath;
+            } catch { /* Fallback to dist if src not found */ }
+          }
+          
+          console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local source: ${fullPath}`);
+          return fullPath;
+        }
+      }
+
+      // Walk up the directory tree from root, trying node_modules at each level
+      let current = path.resolve(root);
     const visited = new Set<string>();
     for (let i = 0; i < 8; i++) {
       const candidate = path.join(current, urlPath);
@@ -49,7 +87,6 @@ export async function resolveFilePath(
     }
 
     // Explicit workspace root (covers hoisted-to-root installs)
-    const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
     if (wsRoot) {
       const wsPath = path.join(wsRoot, urlPath);
       if (!visited.has(wsPath)) {
@@ -92,14 +129,12 @@ export async function resolveFilePath(
     url.startsWith("/packages/") ||
     url.startsWith("/modules/")
   ) {
-    let wsRoot = workspaceRoot;
-    if (!wsRoot) {
-      wsRoot = await findWorkspaceRoot(root);
-      console.log(`[file-path-resolver] Detected workspace root: ${wsRoot} (from app root: ${root})`);
-    }
+    // Already detected wsRoot at function start
     
     // Normalize URL: path.join with leading slash is wrong on Windows (treats as drive root)
     const urlPath = url.startsWith("/") ? url.slice(1) : url;
+    
+    // ...
 
     // CRITICAL: For /lib/ paths, we MUST find the SWS root (which has lib/ directory)
     // Start from app root and walk up until we find a directory with both pnpm-workspace.yaml AND lib/
@@ -156,7 +191,6 @@ export async function resolveFilePath(
   }
 
   // For app files, check if URL already includes the app path
-  const wsRoot = workspaceRoot || (await findWorkspaceRoot(root));
   if (wsRoot) {
     const appRelativeToWorkspace = path
       .relative(wsRoot, root)

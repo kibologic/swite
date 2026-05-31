@@ -1,6 +1,6 @@
 {
   "name": "@swissjs/swite",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "SWITE - SWISS Development Server (Vite replacement)",
   "type": "module",
   "main": "dist/index.js",
@@ -53,6 +53,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kibologic/alpine-erp-core.git"
+    "url": "git+https://github.com/kibologic/swite.git"
   }
 }

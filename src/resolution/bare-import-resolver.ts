@@ -47,7 +47,7 @@ export async function resolveBareImport(
       nodeModulesLocations.push(path.join(workspaceRoot, "node_modules"));
     }
 
-    // Add swiss-lib monorepo node_modules
+    // Add monorepo node_modules if present
     const swissLib = await findSwissLibMonorepo(context.root);
     if (swissLib) {
       const swissNodeModules = path.join(swissLib, "node_modules");
@@ -209,9 +209,19 @@ export async function resolveBareImport(
 
     const fullPath = path.join(pkgDir, entryPoint);
 
-    // Try the exact path first
-    if (await context.fileExists(fullPath)) {
-      return await toUrl(fullPath, context);
+    // Try a few Swiss-specific variations of the entry point before CDN fallback
+    const swissVariations = [
+      fullPath,
+      fullPath.replace(/\.(js|mjs|ts)$/, '.ui'),
+      fullPath.replace(/\.(js|mjs|ts)$/, '.uix'),
+      path.join(pkgDir, 'src/index.ui'),
+      path.join(pkgDir, 'src/index.uix'),
+    ];
+
+    for (const v of swissVariations) {
+      if (await context.fileExists(v)) {
+        return await toUrl(v, context);
+      }
     }
 
     // Try with extensions
