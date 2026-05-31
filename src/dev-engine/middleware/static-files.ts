@@ -433,16 +433,11 @@ export async function setupSPAFallback(
     const accept = String(req.headers?.accept || "");
     
     // DEBUG: Verify handler is being called
-    process.stderr.write(`[SPA FALLBACK] Handler called for: ${req.method} ${fullUrl}\n`);
-    console.error(`[SWITE CSS DEBUG] ========== SPA FALLBACK HANDLER START ==========`);
-    console.error(`[SWITE CSS DEBUG] URL: ${url}, Full URL: ${fullUrl}`);
     
     // --- CRITICAL SAFETY CHECK ---
     // NEVER serve HTML for /src/* requests - these are source files that must be handled by middleware
     // Even if middleware fails, we should return 404, not HTML
     if (req.path?.startsWith("/src/") || url.startsWith("/src/")) {
-      console.error(chalk.red(`[SPA FALLBACK] ⚠️  BLOCKED: Attempt to serve HTML for source path: ${req.method} ${fullUrl}`));
-      console.error(chalk.red(`[SPA FALLBACK] This should have been handled by /src middleware! Returning 404.`));
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`File not found: ${url}`);
       return;
@@ -452,8 +447,6 @@ export async function setupSPAFallback(
     // NEVER serve HTML for /swiss-packages/* requests - these are SWISS framework packages
     // They should be handled by TS/JS handlers to rewrite imports
     if (req.path?.startsWith("/swiss-packages/") || url.startsWith("/swiss-packages/")) {
-      console.error(chalk.red(`[SPA FALLBACK] ⚠️  BLOCKED: Attempt to serve HTML for SWISS package: ${req.method} ${fullUrl}`));
-      console.error(chalk.red(`[SPA FALLBACK] This should have been handled by module transformation middleware! Returning 404.`));
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`File not found: ${url}`);
       return;
@@ -463,21 +456,15 @@ export async function setupSPAFallback(
     // NEVER serve HTML for /lib/* requests - these are workspace library files
     // They should be handled by static file middleware
     if (req.path?.startsWith("/lib/") || url.startsWith("/lib/")) {
-      console.error(chalk.red(`[SPA FALLBACK] ⚠️  BLOCKED: Attempt to serve HTML for /lib/ path: ${req.method} ${fullUrl}`));
-      console.error(chalk.red(`[SPA FALLBACK] This should have been handled by static file middleware! Returning 404.`));
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`File not found: ${url}`);
       return;
     }
     
     // Log every request that hits the fallback (for diagnostics)
-    console.log(chalk.gray(`[SPA FALLBACK] Serving HTML for: ${req.method} ${fullUrl}`));
-    process.stderr.write(`[SPA FALLBACK] About to read HTML file...\n`);
     
     // Log if SPA fallback is being hit for .ui files (this should NOT happen after /src check)
     if (url.endsWith(".ui")) {
-      console.error(chalk.red(`[SPA FALLBACK] ⚠️  WARNING: SPA fallback intercepted .ui file: ${fullUrl}`));
-      console.error(chalk.red(`[SPA FALLBACK] This should have been handled by module transformation middleware!`));
     }
     
     // DO NOT serve HTML for source files - they should be handled by handlers
@@ -494,7 +481,6 @@ export async function setupSPAFallback(
     ) {
       // These should have been handled by middleware handlers
       // If we reach here, the file wasn't found, return 404 with proper content type
-      console.error(chalk.red(`[SPA FALLBACK] Returning 404 for ${url} - should have been handled earlier`));
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`File not found: ${url}`);
       return;
