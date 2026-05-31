@@ -85,9 +85,12 @@ export class HMREngine {
     return this.port;
   }
 
-  async start() {
+  async start(excludeFromHmr?: string[]) {
+    const baseIgnored = ["**/node_modules/**", "**/.git/**", "**/dist/**"];
+    const ignored = excludeFromHmr ? [...baseIgnored, ...excludeFromHmr] : baseIgnored;
+
     this.watcher = chokidar.watch(this.root, {
-      ignored: ["**/node_modules/**", "**/.git/**", "**/dist/**"],
+      ignored,
       ignoreInitial: true,
       awaitWriteFinish: {
         stabilityThreshold: 100,
@@ -108,6 +111,18 @@ export class HMREngine {
         updateType,
         timestamp: Date.now(),
       });
+    });
+
+    this.watcher.on("add", (filePath) => {
+      console.log(chalk.yellow(`[HMR] File added: ${filePath}`));
+      // New file — dependents are unknown, trigger a full reload
+      this.broadcast({ type: "reload", path: filePath, reason: "file-added" });
+    });
+
+    this.watcher.on("unlink", (filePath) => {
+      console.log(chalk.yellow(`[HMR] File deleted: ${filePath}`));
+      // Deleted file — its dependents will 404 on next import, trigger reload
+      this.broadcast({ type: "reload", path: filePath, reason: "file-deleted" });
     });
 
     console.log(chalk.green("[HMR] Watching for file changes..."));
@@ -156,7 +171,8 @@ export class HMREngine {
     type: string;
     path: string;
     updateType?: string;
-    timestamp: number;
+    reason?: string;
+    timestamp?: number;
   }) {
     const payload = JSON.stringify(message);
     this.clients.forEach((client) => {

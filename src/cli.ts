@@ -12,6 +12,11 @@ import { setProductionMode } from "./adapters/proxy/proxyToPython.js";
 const [, , command, ...args] = process.argv;
 const root = resolve(process.cwd());
 
+// --verbose / -v enables full resolver diagnostic output
+if (args.includes("--verbose") || args.includes("-v")) {
+  process.env["SWITE_DEBUG"] = "1";
+}
+
 async function dev(): Promise<void> {
   const config = await loadUserConfig(root);
   const python = config.services?.python;
@@ -35,7 +40,8 @@ async function dev(): Promise<void> {
     root,
     port: config.server?.port ?? 3000,
     host: config.server?.host ?? "localhost",
-    publicDir: "public",
+    hmrPort: config.server?.hmrPort,
+    publicDir: config.publicDir ?? "public",
     open: false,
   });
 
@@ -61,7 +67,8 @@ async function start(): Promise<void> {
     root,
     port: config.server?.port ?? 3000,
     host: config.server?.host ?? "localhost",
-    publicDir: "public",
+    hmrPort: config.server?.hmrPort,
+    publicDir: config.publicDir ?? "public",
     open: false,
   });
 
