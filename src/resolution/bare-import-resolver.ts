@@ -81,12 +81,16 @@ export async function resolveBareImport(
 
       if (!shouldUseCdnFallback(pkgName)) {
         console.warn(
-          `[SWITE] Package ${pkgName} not found anywhere. Scoped package detected; CDN fallback is disabled by default.`,
+          `[SWITE] Cannot resolve "${pkgName}"\n` +
+          `  Searched:\n${nodeModulesLocations.map(p => `    - ${p}`).join('\n')}\n` +
+          `  CDN fallback is disabled. To enable for a scope, set:\n` +
+          `    SWITE_CDN_FALLBACK_SCOPES=@scope1,@scope2\n` +
+          `  Run with --verbose for full resolution trace.`,
         );
         return `/node_modules/${specifier}`;
       }
 
-      console.warn(`[SWITE] Package ${pkgName} not found anywhere, using CDN fallback`);
+      console.warn(`[SWITE] Package ${pkgName} not found in any local location, using CDN fallback`);
       return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
     }
 

@@ -30,7 +30,10 @@ function parseAllowList(): Set<string> {
 
 export function shouldUseCdnFallback(specifierOrPkg: string): boolean {
   const scope = getScope(specifierOrPkg);
-  if (!scope) return true; // unscoped: allow by default
+  // Unscoped packages (e.g. "react") are not automatically CDN-eligible; require
+  // explicit opt-in via SWITE_CDN_FALLBACK_SCOPES to prevent accidental exfiltration
+  // of package requests for private-registry or unscoped internal packages.
+  if (!scope) return false;
   const allow = parseAllowList();
   return allow.has(scope);
 }
