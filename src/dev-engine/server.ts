@@ -133,7 +133,7 @@ export class SwiteServer {
     // Start HMR
     console.time("HMR Start");
     await this.hmr.initialize();
-    await this.hmr.start();
+    await this.hmr.start(userConfig?.excludeFromHmr);
     console.timeEnd("HMR Start");
 
     // Start HTTP server
