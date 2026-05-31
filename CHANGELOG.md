@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+### Patch Changes
+
+- deps: bump @swissjs/core 0.1.10 → 0.1.11 (browser hotfix — guards `process.env` in reconciliation to prevent ReferenceError crash in browser environments)
+
 ## 0.3.4
 
 ### Patch Changes
