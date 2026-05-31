@@ -85,6 +85,9 @@ export class SwiteServer {
     console.log(chalk.cyan("\n⚡ SWITE - SWISS Development Server\n"));
     console.time("Startup");
 
+    // Load user config (swiss.config.ts) so internalScopes etc. flow into handlers
+    const userConfig = await loadUserConfig(this.config.root);
+
     // CG-03: Build symlink registry before serving any requests.
     // Maps realpath(node_modules/pkg symlink) → /node_modules/pkg browser URL
     // so toUrl() can map absolute filesystem paths back to browser URLs.
@@ -101,7 +104,7 @@ export class SwiteServer {
       if (workspaceRoot) {
         nodeModulesDirs.push(path.join(workspaceRoot, "node_modules"));
       }
-      const swissLib = await findSwissLibMonorepo(this.config.root);
+      const swissLib = await findSwissLibMonorepo(this.config.root, userConfig?.siblingRepositories);
       if (swissLib) {
         nodeModulesDirs.push(path.join(swissLib, "node_modules"));
       }
@@ -110,9 +113,6 @@ export class SwiteServer {
       console.warn(`[SWITE] Symlink registry build failed: ${err.message}`);
     }
     console.timeEnd("Symlink Registry");
-
-    // Load user config (swiss.config.ts) so internalScopes etc. flow into handlers
-    const userConfig = await loadUserConfig(this.config.root);
 
     // Setup middleware
     console.time("Middleware Setup");

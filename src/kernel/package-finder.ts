@@ -48,10 +48,20 @@ export async function findSiblingRepository(startPath: string, repoName: string)
 }
 
 /**
- * Backward compatibility wrapper for finding swiss-lib
+ * Find the co-located framework monorepo. Tries each name in `fallbackNames`
+ * in order and returns the first match. The default list is ['swiss-lib'] for
+ * backward compatibility; callers that have a user config should forward
+ * `userConfig.siblingRepositories` here to make the lookup configurable.
  */
-export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
-  return findSiblingRepository(startPath, 'swiss-lib');
+export async function findSwissLibMonorepo(
+  startPath: string,
+  fallbackNames: string[] = ['swiss-lib'],
+): Promise<string | null> {
+  for (const name of fallbackNames) {
+    const result = await findSiblingRepository(startPath, name);
+    if (result) return result;
+  }
+  return null;
 }
 
 /**
