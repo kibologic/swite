@@ -29,10 +29,15 @@ export class UIXHandler extends BaseHandler {
     const filePath = await this.resolveFilePath(url);
     console.log(chalk.blue(`[.uix] ${url}`));
 
+    const pathFixupEnabled = this.context.userConfig?.compilerPathFixup?.enabled !== false;
+    const pathFixupPatterns = this.context.userConfig?.compilerPathFixup?.patterns;
+    const applyPathFixup = (code: string) =>
+      pathFixupEnabled ? fixSwissLibPaths(code, pathFixupPatterns) : code;
+
     // Cache hit
     const cached = await compilationCache.get(filePath, (compiled) => this.getDependencies(compiled));
     if (cached) {
-      const fixed = fixSwissLibPaths(cached);
+      const fixed = applyPathFixup(cached);
       setDevHeaders(res);
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
       res.send(fixed);
@@ -53,7 +58,7 @@ export class UIXHandler extends BaseHandler {
     compiled = tsResult.code;
 
     // Fix compiler-emitted wrong paths before import rewriting
-    compiled = fixSwissLibPaths(compiled);
+    compiled = applyPathFixup(compiled);
 
     // Inline import.meta.env references before import rewriting
     compiled = inlineEnvReferences(compiled, this.context.env);
@@ -72,7 +77,7 @@ export class UIXHandler extends BaseHandler {
     }
 
     const rewritten = await rewriteImports(compiled, filePath, this.context.resolver);
-    const finalCode = fixSwissLibPaths(rewritten);
+    const finalCode = applyPathFixup(rewritten);
 
     await compilationCache.set(filePath, compiled, finalCode, (c) => this.getDependencies(c));
 
