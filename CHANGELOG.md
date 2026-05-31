@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.4
+
+### Patch Changes
+
+- fix(resolution): `findSwissLibMonorepo` now accepts `siblingRepositories` from user config, making sibling repo discovery configurable (#1)
+- fix(resolution): Compiler path fixup (`/swiss-lib/` → `/swiss-packages/`) is now configurable via `compilerPathFixup` config key; can be disabled or given custom patterns (#2)
+- fix(config): Added `publicDir`, `hmrPort`, `hmrHost`, `aliases`, `excludeFromHmr`, and `entry` to `SwiteUserConfig` (#3)
+- fix(resolution): CDN fallback default changed to `false`; unscoped packages no longer fall through to jsDelivr without explicit `SWITE_CDN_FALLBACK_SCOPES` opt-in (#4)
+- fix(hmr): HMR watcher now handles `add` and `unlink` events with full-page reload; `excludeFromHmr` patterns added to chokidar `ignored` list (#5)
+- fix(dx): Added `--verbose` / `-v` flag and `SWITE_DEBUG=1` env var for resolver diagnostics; unresolved packages now log searched paths (#6)
+- fix(static): CSS extraction entry point configurable via `SwiteUserConfig.entry` (defaults to `src/index.ui`); missing entry file no longer crashes server (#7)
+- deps: bump `@swissjs/core` 0.1.9 → 0.1.10
+
 ## 0.3.3
 
 ### Patch Changes
