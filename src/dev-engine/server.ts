@@ -16,6 +16,7 @@ import chalk from "chalk";
 import { setupMiddleware } from "./middleware/middleware-setup.js";
 import { buildSymlinkRegistry } from "../resolution/symlink-registry.js";
 import { findSwissLibMonorepo } from "../kernel/package-finder.js";
+import { loadUserConfig } from "../config/config-loader.js";
 
 export interface SwiteConfig {
   root: string;
@@ -110,6 +111,9 @@ export class SwiteServer {
     }
     console.timeEnd("Symlink Registry");
 
+    // Load user config (swiss.config.ts) so internalScopes etc. flow into handlers
+    const userConfig = await loadUserConfig(this.config.root);
+
     // Setup middleware
     console.time("Middleware Setup");
     const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
@@ -119,6 +123,7 @@ export class SwiteServer {
       publicDir: this.config.publicDir,
       resolver: this.resolver,
       hmr: this.hmr,
+      userConfig,
     });
     this.routes = middlewareResult.routes;
     this.routeScanner = middlewareResult.routeScanner;

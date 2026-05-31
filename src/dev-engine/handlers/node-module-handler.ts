@@ -14,6 +14,7 @@ import { UIHandler } from "./ui-handler.js";
 import { UIXHandler } from "./uix-handler.js";
 import { TSHandler } from "./ts-handler.js";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
+import { findPackage } from "../../kernel/package-finder.js";
 import { shouldUseCdnFallback } from "../../resolution/cdn/cdn-fallback.js";
 
 export class NodeModuleHandler extends BaseHandler {
@@ -76,74 +77,37 @@ export class NodeModuleHandler extends BaseHandler {
           current = parent;
         }
       }
+      // CONSOLIDATED DISCOVERY: Use the Generalized Package Finder
+      // This follows our "Local-First" priority: Siblings > Local node_modules > Workspace node_modules
       if (!filePath) {
-        // Try workspace root node_modules
-        if (workspaceRoot) {
-          const workspaceNodeModulesPath = path.join(workspaceRoot, urlPath);
-          console.log(
-            chalk.blue(
-              `[node_modules] Trying workspace path: ${workspaceNodeModulesPath}`,
-            ),
-          );
-          try {
-            // Try to resolve symlinks first (realpath works even if path is a symlink)
-            const resolvedPath = await fs.realpath(workspaceNodeModulesPath);
-            console.log(
-              chalk.blue(`[node_modules] Resolved to: ${resolvedPath}`),
-            );
-            // Verify the resolved path exists
-            await fs.access(resolvedPath);
-            filePath = resolvedPath;
-            console.log(
-              chalk.green(`[node_modules] ✓ Found in workspace: ${urlPath}`),
-            );
-          } catch (err2) {
-            console.log(
-              chalk.yellow(
-                `[node_modules] Workspace path failed: ${err2 instanceof Error ? err2.message : String(err2)}`,
-              ),
-            );
-            // Try swiss-lib monorepo node_modules (dynamically found)
-            const { findSwissLibMonorepo } = await import("../../kernel/package-finder.js");
-            const swissLib = await findSwissLibMonorepo(this.context.root);
-            if (swissLib) {
-              const swissNodeModulesPath = path.join(swissLib, urlPath);
-              console.log(
-                chalk.blue(
-                  `[node_modules] Trying swiss-lib path: ${swissNodeModulesPath}`,
-                ),
-              );
-              try {
-                // Try to resolve symlinks first (realpath works even if path is a symlink)
-                const resolvedPath = await fs.realpath(swissNodeModulesPath);
-                console.log(
-                  chalk.blue(`[node_modules] Resolved to: ${resolvedPath}`),
-                );
-                // Verify the resolved path exists
-                await fs.access(resolvedPath);
-                filePath = resolvedPath;
-                console.log(
-                  chalk.green(
-                    `[node_modules] ✓ Found in swiss-lib monorepo: ${urlPath}`,
-                  ),
-                );
-              } catch (err3) {
-                console.log(
-                  chalk.yellow(
-                    `[node_modules] swiss-lib path failed: ${err3 instanceof Error ? err3.message : String(err3)}`,
-                  ),
-                );
-                // File not found in any location, will trigger case-insensitive search below
-                filePath = path.join(this.context.root, urlPath);
+        const urlParts = urlPath.split("/");
+        const packageName = urlParts[1].startsWith("@") ? `${urlParts[1]}/${urlParts[2]}` : urlParts[1];
+        const remainingPath = urlParts[1].startsWith("@") ? urlParts.slice(3).join("/") : urlParts.slice(2).join("/");
+
+        const location = await findPackage(packageName, this.context.root, workspaceRoot);
+
+        if (location) {
+          filePath = path.join(location.path, remainingPath);
+          console.log(chalk.green(`[node_modules] ✓ Found ${packageName} via ${location.type}: ${filePath}`));
+
+          // Re-use dist -> src fallback for local siblings
+          if (location.type !== 'node_modules' && filePath.includes("/dist/")) {
+            const srcPath = filePath.replace("/dist/", "/src/").replace(/\.[mc]?js$/, ".ts");
+            try {
+              await fs.access(srcPath);
+              console.log(chalk.yellow(`[node_modules] Intercept: Serving local source instead of dist: ${srcPath}`));
+              filePath = srcPath;
+
+              if (srcPath.endsWith(".ts")) {
+                return await this.tsHandler.handle(url.replace(/\.[mc]?js$/, ".ts"), res);
               }
-            } else {
-              // File not found in any location, will trigger case-insensitive search below
-              filePath = path.join(this.context.root, urlPath);
-            }
+            } catch { /* Fallback to original filePath */ }
           }
-        } else {
-          filePath = path.join(this.context.root, urlPath);
         }
+      }
+
+      if (!filePath) {
+        filePath = path.join(this.context.root, urlPath);
       }
 
       console.log(
@@ -332,6 +296,15 @@ export class NodeModuleHandler extends BaseHandler {
     }
 
     if (!pkgName || pkgName === "." || pkgName === "..") return null;
+
+    // Never redirect internal/private scoped packages to public CDNs
+    const internalScopes = this.context.userConfig?.internalScopes || [];
+    const isInternal = internalScopes.some(scope => pkgName === scope || pkgName.startsWith(scope + "/"));
+    if (isInternal) {
+      console.log(chalk.red(`[node_modules] CDN Blocked: Internal scope package ${pkgName} cannot be served from jsDelivr.`));
+      return null;
+    }
+
     if (!shouldUseCdnFallback(pkgName)) return null;
     // jsDelivr +esm serves ESM build; works for reflect-metadata and most npm packages
     return `https://cdn.jsdelivr.net/npm/${pkgName}/+esm`;

@@ -69,7 +69,7 @@ async function start(): Promise<void> {
 }
 
 async function build(): Promise<void> {
-  const { SwiteBuilder } = await import("./builder.js");
+  const { SwiteBuilder } = await import("./build-engine/builder.js");
   const config = await loadUserConfig(root);
   const builder = new SwiteBuilder({
     root,

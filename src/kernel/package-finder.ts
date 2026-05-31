@@ -18,55 +18,54 @@ export interface PackageLocation {
 }
 
 /**
- * Find a co-located framework monorepo by scanning sibling directories at each
- * ancestor level for any workspace root (pnpm-workspace.yaml) that also has a
- * packages/ directory. Works for any framework directory name.
+ * Find any sibling monorepo by searching for its package.json
  */
-export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
-  let current = path.resolve(startPath);
-
+export async function findSiblingRepository(startPath: string, repoName: string): Promise<string | null> {
+  let current = startPath;
   for (let i = 0; i < 20; i++) {
-    const parent = path.dirname(current);
-    if (parent === current) break;
-
-    // Scan siblings of `current` at this parent level
-    try {
-      const entries = await fs.readdir(parent, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.name === "node_modules") continue;
-        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-        const sibling = path.join(parent, entry.name);
-        if (path.resolve(sibling) === path.resolve(current)) continue; // skip self
-
-        if (
-          await fileExists(path.join(sibling, "pnpm-workspace.yaml")) &&
-          await fileExists(path.join(sibling, "packages"))
-        ) {
-          return sibling;
-        }
-      }
-    } catch {
-      // Skip on permission errors
+    const siblingPath = path.join(current, repoName);
+    const pkgJson = path.join(siblingPath, "package.json");
+    if (await fileExists(pkgJson)) {
+      return siblingPath;
     }
 
-    current = parent;
-  }
+    try {
+      const entries = await fs.readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name === repoName && (entry.isDirectory() || entry.isSymbolicLink())) {
+          const subDir = path.join(current, entry.name);
+          if (await fileExists(path.join(subDir, "package.json"))) {
+            return subDir;
+          }
+        }
+      }
+    } catch { /* Continue */ }
 
+    current = path.dirname(current);
+    if (current === path.dirname(current)) break;
+  }
   return null;
 }
 
 /**
- * Find a specific package by name, searching in:
- * 1. node_modules (local and workspace)
- * 2. swiss-lib/packages (if found)
- * 3. workspace packages (lib/, packages/, modules/)
+ * Backward compatibility wrapper for finding swiss-lib
+ */
+export async function findSwissLibMonorepo(startPath: string): Promise<string | null> {
+  return findSiblingRepository(startPath, 'swiss-lib');
+}
+
+/**
+ * Find a specific package by name, with priority given based on environment.
+ * In development, we prioritize local sibling source code.
  */
 export async function findPackage(
   packageName: string,
   startPath: string,
   workspaceRoot?: string | null
 ): Promise<PackageLocation | null> {
-  // 1. Check local node_modules
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  // 1. Check local node_modules (Standard resolution) - HIGHEST PRIORITY in Remote-First
   const localNodeModules = path.join(startPath, "node_modules", packageName);
   if (await fileExists(path.join(localNodeModules, "package.json"))) {
     return { path: localNodeModules, type: 'node_modules' };
@@ -79,7 +78,7 @@ export async function findPackage(
       return { path: workspaceNodeModules, type: 'node_modules' };
     }
   }
-  
+
   // 3. Check co-located framework monorepo packages/ for any scoped package
   if (packageName.startsWith("@")) {
     const monorepo = await findSwissLibMonorepo(startPath);
@@ -92,24 +91,41 @@ export async function findPackage(
     }
   }
 
-  // 4. Check workspace packages (lib/, packages/, modules/)
+  // 4. In dev: broader sibling scan across parent directories
+  if (isDev && packageName.includes("/")) {
+    const parts = packageName.split("/");
+    const unscoped = parts[parts.length - 1];
+    const parentDirs = [
+      path.join(startPath, ".."),
+      path.join(startPath, "../.."),
+      path.join(startPath, "../../.."),
+    ];
+    for (const parent of parentDirs) {
+      try {
+        const potentialRepos = await fs.readdir(parent);
+        for (const repo of potentialRepos) {
+          const siblingPath = path.join(parent, repo);
+          const packagePath = path.join(siblingPath, "packages", unscoped);
+          if (await fileExists(path.join(packagePath, "package.json"))) {
+            console.log(`[package-finder] Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
+            return { path: packagePath, type: 'swiss-lib' };
+          }
+        }
+      } catch { /* Continue */ }
+    }
+  }
+
+  // 5. Fallback search in internal workspace packages (lib/, packages/, modules/)
   if (workspaceRoot) {
     const packageDirs = ["lib", "packages", "modules", "libraries", "apps"];
     for (const dir of packageDirs) {
       const searchDir = path.join(workspaceRoot, dir);
       if (!(await fileExists(searchDir))) continue;
       
-      // Try scoped package name
-      if (packageName.startsWith("@")) {
-        const unscoped = packageName.split("/")[1];
-        const packagePath = path.join(searchDir, unscoped);
-        if (await fileExists(path.join(packagePath, "package.json"))) {
-          return { path: packagePath, type: 'workspace' };
-        }
-      }
-      
-      // Try full package name
-      const packagePath = path.join(searchDir, packageName);
+      const parts = packageName.split("/");
+      const unscoped = parts.length > 1 ? parts[1] : parts[0];
+      const packagePath = path.join(searchDir, unscoped);
+
       if (await fileExists(path.join(packagePath, "package.json"))) {
         return { path: packagePath, type: 'workspace' };
       }

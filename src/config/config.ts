@@ -23,6 +23,17 @@ export interface ServerConfig {
 export interface SwiteUserConfig {
   server?: ServerConfig;
   services?: ServicesConfig;
+  /**
+   * Package scopes that should be treated as "internal" or "private".
+   * These scopes prioritize local/monorepo resolution and are forbidden from CDN redirects.
+   * e.g. ["@kibologic", "@alpine"]
+   */
+  internalScopes?: string[];
+  /**
+   * Manual override for sibling repository lookup.
+   * Swite will search these directories for local package source code.
+   */
+  siblingRepositories?: string[];
 }
 
 /**
