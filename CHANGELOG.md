@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+### Patch Changes
+
+- security: pin qs >= 6.11.0 to satisfy Dependabot scanner (#8)
+- deps: bump @swissjs/core 0.1.8 -> 0.1.9 (prop reactivity fix)
+
 ## 0.3.2
 
 ### Patch Changes
