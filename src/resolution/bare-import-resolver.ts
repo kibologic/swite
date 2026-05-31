@@ -23,6 +23,7 @@ export async function resolveBareImport(
   specifier: string,
   context: BareImportResolverContext
 ): Promise<string> {
+  const debug = process.env["SWITE_DEBUG"] === "1";
 
   // Extract package name outside the try/catch so fallback logic can reference it.
   // This must stay project-agnostic: works for both scoped and unscoped packages.
@@ -54,6 +55,10 @@ export async function resolveBareImport(
       if (await context.fileExists(swissNodeModules)) {
         nodeModulesLocations.push(swissNodeModules);
       }
+    }
+
+    if (debug) {
+      console.log(`[swite:resolve] Trying "${specifier}" in:`, nodeModulesLocations);
     }
 
     // Try each location
