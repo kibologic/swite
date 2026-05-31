@@ -118,6 +118,7 @@ export async function setupMiddleware(
     root: config.root,
     workspaceRoot,
     env,
+    userConfig: config.userConfig,
   };
 
   const uiHandler = new UIHandler(handlerContext);

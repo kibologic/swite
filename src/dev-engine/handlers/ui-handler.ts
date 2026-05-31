@@ -36,10 +36,15 @@ export class UIHandler extends BaseHandler {
       throw new Error(`File not found: ${url} (resolved to: ${filePath})`);
     }
 
+    const pathFixupEnabled = this.context.userConfig?.compilerPathFixup?.enabled !== false;
+    const pathFixupPatterns = this.context.userConfig?.compilerPathFixup?.patterns;
+    const applyPathFixup = (code: string) =>
+      pathFixupEnabled ? fixSwissLibPaths(code, pathFixupPatterns) : code;
+
     // Cache hit
     const cached = await compilationCache.get(filePath, (compiled) => this.getDependencies(compiled));
     if (cached) {
-      const fixed = fixSwissLibPaths(cached);
+      const fixed = applyPathFixup(cached);
       setDevHeaders(res);
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
       res.setHeader("Content-Length", Buffer.byteLength(fixed, "utf-8"));
@@ -61,7 +66,7 @@ export class UIHandler extends BaseHandler {
     compiled = tsResult.code;
 
     // Fix compiler-emitted wrong paths before import rewriting
-    compiled = fixSwissLibPaths(compiled);
+    compiled = applyPathFixup(compiled);
 
     // Inline import.meta.env references before import rewriting
     compiled = inlineEnvReferences(compiled, this.context.env);
@@ -75,7 +80,7 @@ export class UIHandler extends BaseHandler {
     }
 
     const rewritten = await rewriteImports(compiled, filePath, this.context.resolver);
-    const finalCode = fixSwissLibPaths(rewritten);
+    const finalCode = applyPathFixup(rewritten);
 
     await compilationCache.set(filePath, compiled, finalCode, (c) => this.getDependencies(c));
 

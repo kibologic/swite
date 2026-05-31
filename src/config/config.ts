@@ -30,10 +30,20 @@ export interface SwiteUserConfig {
    */
   internalScopes?: string[];
   /**
-   * Manual override for sibling repository lookup.
-   * Swite will search these directories for local package source code.
+   * Names of sibling monorepos to search for framework packages.
+   * Defaults to ['swiss-lib']. Override when your framework lives in a differently-named repo.
    */
   siblingRepositories?: string[];
+  /**
+   * Control the compiler path fixup that rewrites `/swiss-lib/` → `/swiss-packages/`.
+   * Disable entirely or supply custom from/to pairs when your project uses different paths.
+   */
+  compilerPathFixup?: {
+    /** When false, no path fixup is applied. Defaults to true for backward compatibility. */
+    enabled?: boolean;
+    /** Custom replacement patterns. Defaults to the built-in swiss-lib → swiss-packages pairs. */
+    patterns?: Array<{ from: string; to: string }>;
+  };
 }
 
 /**
