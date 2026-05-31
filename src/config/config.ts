@@ -18,11 +18,35 @@ export interface ServicesConfig {
 export interface ServerConfig {
   port?: number;
   host?: string;
+  /** Port for the HMR WebSocket server. Defaults to 24678. */
+  hmrPort?: number;
+  /** Host for the HMR WebSocket server. Defaults to server.host. */
+  hmrHost?: string;
 }
 
 export interface SwiteUserConfig {
   server?: ServerConfig;
   services?: ServicesConfig;
+  /**
+   * Directory to serve static assets from. Defaults to "public".
+   * Path is relative to the project root.
+   */
+  publicDir?: string;
+  /**
+   * Application entry file for CSS extraction. Defaults to "src/index.ui".
+   * Path is relative to the project root.
+   */
+  entry?: string;
+  /**
+   * Module aliases resolved during bare import resolution.
+   * e.g. { "@/": "src/" } maps @/ imports to the src/ directory.
+   */
+  aliases?: Record<string, string>;
+  /**
+   * Glob patterns to exclude from HMR watching in addition to the defaults
+   * (node_modules, .git, dist). Useful for generated files or large assets.
+   */
+  excludeFromHmr?: string[];
   /**
    * Package scopes that should be treated as "internal" or "private".
    * These scopes prioritize local/monorepo resolution and are forbidden from CDN redirects.

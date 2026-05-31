@@ -35,7 +35,8 @@ async function dev(): Promise<void> {
     root,
     port: config.server?.port ?? 3000,
     host: config.server?.host ?? "localhost",
-    publicDir: "public",
+    hmrPort: config.server?.hmrPort,
+    publicDir: config.publicDir ?? "public",
     open: false,
   });
 
@@ -61,7 +62,8 @@ async function start(): Promise<void> {
     root,
     port: config.server?.port ?? 3000,
     host: config.server?.host ?? "localhost",
-    publicDir: "public",
+    hmrPort: config.server?.hmrPort,
+    publicDir: config.publicDir ?? "public",
     open: false,
   });
 
