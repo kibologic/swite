@@ -53,6 +53,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kibologic/alpine-erp-core.git"
+    "url": "git+https://github.com/kibologic/swite.git"
   }
 }

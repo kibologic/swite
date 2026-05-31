@@ -35,6 +35,7 @@ export interface MiddlewareConfig {
   publicDir: string;
   resolver: ModuleResolver;
   hmr: HMREngine;
+  userConfig?: import("../../config/config.js").SwiteUserConfig;
 }
 
 export interface MiddlewareResult {
