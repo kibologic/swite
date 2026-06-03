@@ -20,7 +20,7 @@ export interface PackageLocation {
 /**
  * Find any sibling monorepo by searching for its package.json
  */
-export async function findSiblingRepository(startPath: string, repoName: string): Promise<string | null> {
+async function findSiblingRepository(startPath: string, repoName: string): Promise<string | null> {
   let current = startPath;
   for (let i = 0; i < 20; i++) {
     const siblingPath = path.join(current, repoName);
@@ -148,7 +148,7 @@ export async function findPackage(
 /**
  * Find all possible workspace roots by searching up the tree
  */
-export async function findWorkspaceRoots(startPath: string): Promise<string[]> {
+async function findWorkspaceRoots(startPath: string): Promise<string[]> {
   const roots: string[] = [];
   let current = startPath;
   

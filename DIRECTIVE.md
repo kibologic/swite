@@ -486,3 +486,30 @@ Same status — tsc clean, shipped.
 - Transform pipeline extraction (Lock 3 architecture)
 - Resolver stratification (Lock 3)
 - Python adapter interface (Lock 3)
+
+---
+
+## Session Log — 2026-06-04: APIP Run (PRIME-1 through PRIME-8)
+
+**Agent:** APIP Protocol — full integrity sweep per `registry/docs/alpine-erp/APIP.md`
+
+### PRIME-1 Fixes
+
+- `src/kernel/workspace.ts` — gated 4 console.log calls with `SWITE_DEBUG` flag. Previously fired on every dev server startup, polluting output with internal workspace root discovery trace.
+- `src/dev-engine/middleware/static-files.ts` — gated 48 ungated console.log/warn/error calls with `SWITE_DEBUG` flag. These were internal path-resolution diagnostic messages firing unconditionally on every startup request.
+- `src/kernel/package-finder.ts` — demoted `findSiblingRepository` and `findWorkspaceRoots` from `export` to private (no `export` keyword). Neither is imported by any file in the codebase or re-exported from the package's public index.
+
+### PRIME-6 Fixes
+
+- `src/dev-engine/middleware/static-files.ts` — hardcoded `VERSION 3.0.0` in two console.log messages corrected to `VERSION 0.3.5` (actual package version).
+
+### PRIME-7 Fixes
+
+- `package.json` overrides: updated `qs` from `^6.11.0` → `>=6.15.2` (CVE fix), added `esbuild: ">=0.25.0"` and `vite: ">=6.4.2"` to override transitive vulnerable versions.
+
+### Still Open
+
+- S-01 through S-04: Python process integration (DIRECTIVE sprint items)
+- S-05: link: deps → semver deps before first npm publish
+- `package-registry.ts` startup console.logs are informational (scanning workspace) — left as-is since they're useful user-facing output
+- `package-finder.ts:120` — `[package-finder] Dev Intercept` console.log — informational, left as-is

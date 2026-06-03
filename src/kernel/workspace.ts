@@ -12,38 +12,36 @@ import path from "node:path";
  * Updated: Now also checks for lib/ directory to ensure we find the correct SWS root
  */
 export async function findWorkspaceRoot(root: string): Promise<string | null> {
+  const debug = process.env["SWITE_DEBUG"] === "1";
   let current = root;
-  for (let i = 0; i < 10; i++) { // Increased from 5 to 10 to go higher up
+  for (let i = 0; i < 10; i++) {
     const workspaceFile = path.join(current, "pnpm-workspace.yaml");
     const packageJson = path.join(current, "package.json");
     const libDir = path.join(current, "lib");
-    
+
     try {
       await fs.access(workspaceFile);
-      // Accept root if it has lib/ (SWS with lib/) or packages/ (SWS with packages/ at root)
       const packagesDir = path.join(current, "packages");
       try {
         await fs.access(libDir);
-        console.log(`[workspace] Found workspace root with lib/: ${current}`);
+        if (debug) console.log(`[workspace] Found workspace root with lib/: ${current}`);
         return current;
       } catch {
         try {
           await fs.access(packagesDir);
-          console.log(`[workspace] Found workspace root with packages/: ${current}`);
+          if (debug) console.log(`[workspace] Found workspace root with packages/: ${current}`);
           return current;
         } catch {
-          // Workspace file exists but no lib/ or packages/, continue searching up
-          console.log(`[workspace] Found workspace file at ${current} but no lib/ or packages/, continuing search...`);
+          if (debug) console.log(`[workspace] Found workspace file at ${current} but no lib/ or packages/, continuing search...`);
         }
       }
     } catch {
       try {
         const pkgJson = JSON.parse(await fs.readFile(packageJson, "utf-8"));
         if (pkgJson?.workspaces) {
-          // Also check for lib/ when package.json has workspaces
           try {
             await fs.access(libDir);
-            console.log(`[workspace] Found workspace root with lib/ (via package.json): ${current}`);
+            if (debug) console.log(`[workspace] Found workspace root with lib/ (via package.json): ${current}`);
             return current;
           } catch {
             // Has workspaces but no lib/, continue searching
@@ -57,6 +55,6 @@ export async function findWorkspaceRoot(root: string): Promise<string | null> {
     if (parent === current) break;
     current = parent;
   }
-  console.warn(`[workspace] No workspace root found starting from: ${root}`);
+  if (debug) console.warn(`[workspace] No workspace root found starting from: ${root}`);
   return null;
 }
