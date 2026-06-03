@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- fix(S-03): Python service health check timeout corrected from 15s → 30s per DIRECTIVE spec. Python services with slow startup (e.g. model loading, DB connection pool warmup) were being killed before they became healthy.
+
+- fix(css-modules): CSS import handling in the compile pipeline now distinguishes three cases:
+  - Named/default imports (`import styles from "./x.module.css"`) → `const styles = {}` — no more `undefined` at runtime
+  - Side-effect imports (`import "./x.css"`) → silently stripped
+  - Dynamic imports (`import("./x.css")`) → `({})` instead of `undefined`
+
+- fix(test): Stale import paths in `__tests__/import-rewriter-bug.test.ts` updated to reflect post-refactor module locations (`src/resolution/rewriting/import-rewriter.js`, `src/resolution/resolver.js`).
+
+- deps: bump `@swissjs/core` 0.1.11 → 0.2.0 (T-005 reactivity double-render fix)
+
 ## 0.3.5
 
 ### Patch Changes
