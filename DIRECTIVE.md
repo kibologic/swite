@@ -481,8 +481,11 @@ Same status — context resumed, tsc clean, shipped.
 Same status — tsc clean, shipped.
 
 ### Open Issues Still Pending
-- S-01 through S-04: Python service integration
-- S-05: semver dep fix before publish
+- S-01: defineConfig services.python schema — ✅ DONE (confirmed)
+- S-02: proxyToPython utility — ✅ DONE (confirmed)
+- S-03: CLI dev process manager — ✅ DONE (health timeout corrected to 30s in 0.4.0)
+- S-04: production mode — ✅ DONE (confirmed)
+- S-05: semver dep fix before publish — verify all link: refs are gone
 - Transform pipeline extraction (Lock 3 architecture)
 - Resolver stratification (Lock 3)
 - Python adapter interface (Lock 3)
@@ -509,7 +512,32 @@ Same status — tsc clean, shipped.
 
 ### Still Open
 
-- S-01 through S-04: Python process integration (DIRECTIVE sprint items)
-- S-05: link: deps → semver deps before first npm publish
+- S-05: verify no remaining link: deps before first npm publish
+- CSS module persistent disk cache (deferred)
+- HMR state preservation (deferred)
+- Workspace resolver redesign / @kibologic/* path guessing (Lock 3)
 - `package-registry.ts` startup console.logs are informational (scanning workspace) — left as-is since they're useful user-facing output
-- `package-finder.ts:120` — `[package-finder] Dev Intercept` console.log — informational, left as-is
+
+---
+
+## Session Log — 2026-06-04: Feature Improvements Sprint (0.4.0)
+
+### S-03 Complete
+
+- `src/dev-engine/pythonDevManager.ts:8` — `HEALTH_TIMEOUT_MS` corrected 15_000 → 30_000. Spec in DIRECTIVE.md says 30s; 15s was too aggressive for services with slow startup.
+
+### CSS Modules Fixed
+
+- `src/dev-engine/handlers/base-handler.ts` — CSS import handling now distinguishes three cases:
+  1. Named/default imports (`import styles from "./x.module.css"`) → `const styles = {};`
+  2. Side-effect imports (`import "./x.css"`) → stripped silently
+  3. Dynamic imports (`import("./x.css")`) → `({})` — was `undefined`, causing runtime errors
+
+### Test Path Fix
+
+- `__tests__/import-rewriter-bug.test.ts` — stale import paths updated from old flat structure (`../src/import-rewriter.js`) to post-refactor paths (`../src/resolution/rewriting/import-rewriter.js`).
+
+### Version Bump
+
+- `@swissjs/swite` 0.3.5 → 0.4.0
+- `@swissjs/core` dep 0.1.11 → 0.2.0 (T-005 double-render fix in swiss-lib)
