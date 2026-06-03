@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { rewriteImports } from '../src/import-rewriter.js';
-import { ModuleResolver } from '../src/resolver.js';
+import { rewriteImports } from '../src/resolution/rewriting/import-rewriter.js';
+import { ModuleResolver } from '../src/resolution/resolver.js';
 
 describe('Import Rewriter - Malformed Import Bug', () => {
   it('should not create malformed imports when rewriting multiple imports', async () => {

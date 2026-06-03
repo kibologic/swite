@@ -87,12 +87,39 @@ export class BaseHandler {
     compiled = applyPathFixup(compiled);
     compiled = inlineEnvReferences(compiled, this.context.env);
 
-    // Strip CSS static-asset imports — they are not ES modules
+    // Handle CSS imports:
+    // - Named/default imports (CSS modules): replace with const binding to empty object
+    //   so that apps using `import styles from "./x.module.css"` get {} instead of undefined.
+    // - Side-effect imports (import "./x.css"): strip silently — no runtime value needed.
+    // - Dynamic imports (import("./x.css")): return empty object.
     const beforeCss = compiled;
-    compiled = compiled.replace(/^[^\S\r\n]*import\s[^'"]*['"][^'"]*\.css['"]\s*;?[^\S\r\n]*$/gm, "");
-    compiled = compiled.replace(/\bimport\s*\(\s*['"][^'"]*\.css['"]\s*\)/g, "undefined");
+    // Named/default imports → const <binding> = {}
+    compiled = compiled.replace(
+      /^[^\S\r\n]*import\s+((?:\w+\s*,?\s*)?(?:\{[^}]*\}\s*,?\s*)?(?:\*\s+as\s+\w+\s*)?)\bfrom\s*['"][^'"]*\.css['"]\s*;?[^\S\r\n]*$/gm,
+      (_match, binding) => {
+        // Extract identifiers from the binding clause and emit const declarations
+        const ids: string[] = [];
+        const defaultMatch = binding.match(/^(\w+)(?:\s*,|\s*$)/);
+        if (defaultMatch) ids.push(defaultMatch[1]);
+        const nsMatch = binding.match(/\*\s+as\s+(\w+)/);
+        if (nsMatch) ids.push(nsMatch[1]);
+        const namedMatch = binding.match(/\{([^}]+)\}/);
+        if (namedMatch) {
+          namedMatch[1].split(",").forEach((s: string) => {
+            const alias = s.trim().split(/\s+as\s+/).pop()?.trim();
+            if (alias) ids.push(alias);
+          });
+        }
+        return ids.length ? ids.map((id) => `const ${id} = {};`).join(" ") : "";
+      },
+    );
+    // Side-effect imports → strip
+    compiled = compiled.replace(/^[^\S\r\n]*import\s*['"][^'"]*\.css['"]\s*;?[^\S\r\n]*$/gm, "");
+    // Dynamic imports → empty object
+    compiled = compiled.replace(/\bimport\s*\(\s*['"][^'"]*\.css['"]\s*\)/g, "({})");
     if (beforeCss !== compiled) {
-      console.log(chalk.blue(`[${label}] Stripped CSS imports from ${url}`));
+      const _debug = process.env["SWITE_DEBUG"] === "1";
+      if (_debug) console.log(chalk.blue(`[${label}] Handled CSS imports from ${url}`));
     }
 
     if (BARE_IMPORT_RE.test(compiled)) {

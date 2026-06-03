@@ -5,7 +5,7 @@ import { initPythonProxy } from "../adapters/proxy/proxyToPython.js";
 import type { PythonServiceConfig } from "../config/config.js";
 
 const POLL_INTERVAL_MS = 500;
-const HEALTH_TIMEOUT_MS = 15_000;
+const HEALTH_TIMEOUT_MS = 30_000;
 const BACKOFF_THRESHOLD = 5;
 
 let _child: ChildProcess | null = null;
