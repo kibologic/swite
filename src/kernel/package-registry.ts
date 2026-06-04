@@ -196,3 +196,12 @@ export function getPackageRegistry(): PackageRegistry {
   }
   return registryInstance;
 }
+
+/**
+ * Reset the package registry singleton. For use in tests only.
+ * Call before creating a ModuleResolver to prevent the previous scan state
+ * from leaking between tests.
+ */
+export function resetPackageRegistry(): void {
+  registryInstance = null;
+}
