@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+### Patch Changes
+
+- security: bind dev server to loopback by default (R-001) — `src/dev-engine/server.ts:171` no longer rewrites a requested `localhost`/`127.0.0.1` host to `0.0.0.0`; all-interfaces binding is now explicit opt-in only (set `host: "0.0.0.0"` in config or pass `--host 0.0.0.0`).
+- security: validate HMR WebSocket Origin (R-002) — `src/dev-engine/hmr/hmr.ts` now enforces an origin allowlist on every incoming WebSocket upgrade; connections with a missing or non-allowlisted `Origin` header are closed with code 1008; same-origin dev connections (and the loopback alias pair `localhost`↔`127.0.0.1`) are allowed automatically.
+- test: regression suite `__tests__/security-r001-r002.test.ts` added — 18 tests covering both fixes (7 for R-001 including old-behaviour guards, 11 for R-002).
+
 ## 0.4.0
 
 ### Minor Changes
