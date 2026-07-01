@@ -46,12 +46,12 @@ export interface MiddlewareResult {
 
 const SOURCE_EXTS = new Set([".ui", ".uix", ".ts", ".mjs"]);
 
+type NodeSystemError = Error & { code?: string; errno?: number };
+
 function isFileNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (("code" in error && (error as any).code === "ENOENT") ||
-      ("errno" in error && (error as any).errno === -4058))
-  );
+  if (!(error instanceof Error)) return false;
+  const sysError = error as NodeSystemError;
+  return sysError.code === "ENOENT" || sysError.errno === -4058;
 }
 
 function sendSourceError(res: Response, error: unknown, fullPath: string): void {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+### Patch Changes
+
+- fix(security): update @swissjs/\* deps to 1.2.1/1.2.3, add pnpm security overrides, fix build script to use standalone tsc (no project references), eliminate as-any casts in middleware
+
 ## 0.4.1
 
 ### Patch Changes
@@ -15,6 +21,7 @@
 - fix(S-03): Python service health check timeout corrected from 15s → 30s per DIRECTIVE spec. Python services with slow startup (e.g. model loading, DB connection pool warmup) were being killed before they became healthy.
 
 - fix(css-modules): CSS import handling in the compile pipeline now distinguishes three cases:
+
   - Named/default imports (`import styles from "./x.module.css"`) → `const styles = {}` — no more `undefined` at runtime
   - Side-effect imports (`import "./x.css"`) → silently stripped
   - Dynamic imports (`import("./x.css")`) → `({})` instead of `undefined`
