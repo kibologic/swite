@@ -53,7 +53,32 @@ export class SwiteServer {
     };
 
     this.resolver = new ModuleResolver(this.config.root);
-    this.hmr = new HMREngine(this.config.root, this.config.hmrPort);
+    // Security (R-002): build the HMR allowed-origin list from the dev server
+    // host+port so the WebSocket server can reject cross-origin connections.
+    // When host is "localhost" we also add the numeric loopback form and vice
+    // versa — browsers send whichever name the user typed in the address bar.
+    const devOrigins = this.buildHmrAllowedOrigins();
+    this.hmr = new HMREngine(this.config.root, this.config.hmrPort, devOrigins);
+  }
+
+  /**
+   * Build the list of origins that are allowed to open an HMR WebSocket.
+   * Always includes both the configured host and its loopback alias so the
+   * browser can connect regardless of whether the dev typed "localhost" or
+   * "127.0.0.1" in the address bar.
+   */
+  private buildHmrAllowedOrigins(): string[] {
+    const { host, port } = this.config;
+    const origins: string[] = [];
+    const add = (h: string) => origins.push(`http://${h}:${port}`);
+
+    add(host);
+
+    // When the dev host is either loopback alias, also allow the other form.
+    if (host === "localhost") add("127.0.0.1");
+    else if (host === "127.0.0.1") add("localhost");
+
+    return origins;
   }
 
   // CG-03: find workspace root by walking up from startDir
@@ -137,8 +162,13 @@ export class SwiteServer {
     console.timeEnd("HMR Start");
 
     // Start HTTP server
-    // Use 0.0.0.0 to bind to all interfaces (IPv4 and IPv6)
-    const bindHost = this.config.host === "localhost" ? "0.0.0.0" : this.config.host;
+    // Security (R-001): honour the requested host literally.
+    // The default host is "localhost" which Node binds to the loopback
+    // interface only (127.0.0.1 / ::1).  Binding all interfaces (0.0.0.0)
+    // must be an explicit opt-in: the developer must set host to "0.0.0.0"
+    // in their swite.config.ts or pass --host 0.0.0.0 on the CLI.
+    // We never silently rewrite a requested loopback address to 0.0.0.0.
+    const bindHost = this.config.host;
     console.time("HTTP Listen");
     await new Promise<void>((resolve) => {
       this.app.listen(this.config.port, bindHost, () => {

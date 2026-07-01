@@ -13,14 +13,40 @@ export class HMREngine {
   private watcher?: chokidar.FSWatcher;
   private clients = new Set<WebSocket>();
   private port: number;
+  /** Origins permitted to connect (e.g. "http://localhost:3000"). */
+  private allowedOrigins: Set<string>;
 
   constructor(
     private root: string,
     hmrPort?: number,
+    allowedOrigins: string[] = [],
   ) {
     this.port = hmrPort || 24678;
+    // Security (R-002): build an origin allowlist.
+    // Always allow the two canonical loopback forms so a default dev setup
+    // (host: "localhost", port: 3000) works without any extra config.
+    this.allowedOrigins = new Set([
+      ...allowedOrigins,
+    ]);
     // WebSocketServer will be created in initialize() method
     // This allows async port checking before server creation
+  }
+
+  /**
+   * Return true when `origin` is on the allowlist.
+   * - Absent / empty origin header → REJECT (not a browser page request).
+   * - Exact match (scheme + host + optional port) → ALLOW.
+   * - The check is case-insensitive on the scheme+host portion per RFC 6454.
+   */
+  private isOriginAllowed(origin: string | undefined): boolean {
+    if (!origin) return false;
+    // Normalise: strip trailing slash, lower-case scheme+host.
+    const normalise = (o: string) => o.replace(/\/$/, "").toLowerCase();
+    const candidate = normalise(origin);
+    for (const allowed of this.allowedOrigins) {
+      if (normalise(allowed) === candidate) return true;
+    }
+    return false;
   }
 
   async initialize(): Promise<void> {
@@ -51,7 +77,26 @@ export class HMREngine {
   }
 
   private setupWebSocket() {
-    this.wss.on("connection", (ws) => {
+    // Security (R-002): validate the Origin header on every incoming WebSocket
+    // upgrade to prevent cross-site WebSocket hijacking.  A malicious page
+    // served from a different origin cannot subscribe to HMR events (which
+    // include absolute filesystem paths of every changed file).
+    //
+    // Connections with a missing or non-allowlisted Origin are rejected with
+    // a 403 close frame.  Same-origin connections from the dev server's own
+    // host:port are always allowed via this.allowedOrigins.
+    this.wss.on("connection", (ws, req) => {
+      const origin = req.headers["origin"];
+      if (!this.isOriginAllowed(origin)) {
+        console.warn(
+          chalk.red(
+            `[HMR] Rejected connection from disallowed origin: ${origin ?? "(none)"}`,
+          ),
+        );
+        ws.close(1008, "Origin not allowed");
+        return;
+      }
+
       this.clients.add(ws);
       console.log(chalk.green("[HMR] Client connected"));
 
