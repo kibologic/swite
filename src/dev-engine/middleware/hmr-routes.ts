@@ -14,9 +14,18 @@ export interface HMRRoutesConfig {
 }
 
 /**
- * Setup HMR client endpoint and routes endpoint
+ * Setup HMR client endpoint and routes endpoint.
+ *
+ * Dev-only: these endpoints expose internal route definitions
+ * (/__swite_routes), allow probing arbitrary internal URLs
+ * (/__swite_diagnose), and serve the HMR client script — none of this
+ * belongs on a production deployment, unauthenticated or not.
  */
 export function setupHMRRoutes(app: Express, config: HMRRoutesConfig): void {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+
   // HMR client injection
   app.get("/__swite_hmr_client", (req, res) => {
     res.setHeader("Content-Type", "application/javascript");

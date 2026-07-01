@@ -155,11 +155,17 @@ export class SwiteServer {
     this.routeWatcher = middlewareResult.routeWatcher;
     console.timeEnd("Middleware Setup");
 
-    // Start HMR
-    console.time("HMR Start");
-    await this.hmr.initialize();
-    await this.hmr.start(userConfig?.excludeFromHmr);
-    console.timeEnd("HMR Start");
+    // Start HMR — dev-only. HMR recompiles and pushes source over an
+    // unauthenticated WebSocket, which has no place in a production deployment.
+    const isProduction = process.env.NODE_ENV === "production";
+    if (!isProduction) {
+      console.time("HMR Start");
+      await this.hmr.initialize();
+      await this.hmr.start(userConfig?.excludeFromHmr);
+      console.timeEnd("HMR Start");
+    } else {
+      console.log(chalk.gray("[SWITE] NODE_ENV=production — HMR disabled"));
+    }
 
     // Start HTTP server
     // Security (R-001): honour the requested host literally.
