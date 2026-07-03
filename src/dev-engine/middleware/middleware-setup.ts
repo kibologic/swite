@@ -54,10 +54,19 @@ function isFileNotFoundError(error: unknown): boolean {
   return sysError.code === "ENOENT" || sysError.errno === -4058;
 }
 
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 function sendSourceError(res: Response, error: unknown, fullPath: string): void {
   if (res.headersSent) return;
   const status = isFileNotFoundError(error) ? 404 : 500;
   res.status(status).setHeader("Content-Type", "text/plain");
+  if (IS_PRODUCTION) {
+    // Never leak error.message or filesystem paths to the client in
+    // production — the full detail is already in the console.error() at
+    // each call site above. Mirrors the pattern the Python backend uses.
+    res.send(status === 404 ? "Not found" : "Internal server error");
+    return;
+  }
   res.send(
     isFileNotFoundError(error)
       ? `File not found: ${fullPath}`
@@ -143,7 +152,12 @@ export async function setupMiddleware(
       }
     } catch (error) {
       console.error(chalk.red(`[/packages] Error ${fullUrl}:`), error);
-      if (!res.headersSent) res.status(500).setHeader("Content-Type", "text/plain").send(String(error));
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .setHeader("Content-Type", "text/plain")
+          .send(IS_PRODUCTION ? "Internal server error" : String(error));
+      }
       return;
     }
     next();
@@ -334,7 +348,11 @@ export async function setupMiddleware(
     } catch (error) {
       console.error(chalk.red(`[middleware] Error ${url}:`), error);
       if (!res.headersSent) {
-        res.status(500).send(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        res.status(500).send(
+          IS_PRODUCTION
+            ? "Internal server error"
+            : `Error: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
   });
