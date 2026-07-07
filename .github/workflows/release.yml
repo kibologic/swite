@@ -11,6 +11,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write  # required for npm Trusted Publishing (OIDC)
 
 jobs:
   release:
@@ -34,12 +35,21 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # npm Trusted Publishing (OIDC) requires npm >=11.5.1; the bundled
+      # version on this runner/Node setup is older.
+      - name: Update npm for Trusted Publishing support
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
+      # No NODE_AUTH_TOKEN: publishing uses npm Trusted Publishing (OIDC),
+      # configured per-package on npmjs.com to trust this exact repo +
+      # workflow file. Leaving a token env var here would make npm prefer
+      # the token over OIDC.
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
@@ -50,4 +60,3 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
