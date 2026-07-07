@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3
+
+### Patch Changes
+
+- 13c164a: Fix: dev server now emits inline source maps for both the plain `.ts` esbuild
+  transform path and the post-`UiCompiler` `.ui`/`.uix` transform path. Dev
+  builds previously shipped zero source maps, so devtools couldn't map
+  compiled output back to source.
+
 ## 0.4.2
 
 ### Patch Changes
