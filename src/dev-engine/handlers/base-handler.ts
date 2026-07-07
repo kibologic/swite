@@ -81,6 +81,13 @@ export class BaseHandler {
       format: "esm",
       target: "esnext",
       sourcefile: filePath,
+      // FABLE-SW-001 recommendation 3: dev had zero source maps. Note this
+      // only maps back to post-UiCompiler intermediate code, not the original
+      // .uix source -- UiCompiler.compileAsync doesn't itself emit a source
+      // map to chain through, so full .uix-line-number fidelity is a deeper,
+      // separate compiler change. Still strictly better than the unmapped,
+      // esbuild-transformed-only output devtools showed before.
+      sourcemap: "inline",
     });
     compiled = tsResult.code;
 
