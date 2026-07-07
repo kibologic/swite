@@ -28,10 +28,14 @@ jobs:
         with:
           version: 10
 
+      # Node 20+ required: npm@latest (needed below for Trusted Publishing/
+      # OIDC support) requires Node ^20.17.0 || >=22.9.0. This only affects
+      # the CI tooling runtime, not the published package's own `engines`
+      # requirement.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
