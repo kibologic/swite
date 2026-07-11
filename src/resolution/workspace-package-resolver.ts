@@ -49,17 +49,16 @@ export async function resolveWorkspacePackage(
     }
   }
 
-  // Also include any co-located framework monorepo (any workspace with packages/)
+  // Also include any co-located framework monorepo. registry.scanWorkspace()
+  // (via scanDirectory()) recursively discovers package.json files with no
+  // assumption about directory layout, so just handing it the monorepo root
+  // is enough -- packages don't need to live under a "packages/" subdirectory
+  // (swiss-lib's own packages are directly-named top-level dirs like
+  // runtime/, compiler/, plugins/file-router/, not nested under one).
   try {
     const monorepo = await findSwissLibMonorepo(context.root);
     if (monorepo && !workspaceRoots.includes(monorepo)) {
       workspaceRoots.unshift(monorepo);
-    }
-    if (monorepo) {
-      const packagesDir = path.join(monorepo, "packages");
-      if (await context.fileExists(packagesDir) && !workspaceRoots.includes(packagesDir)) {
-        workspaceRoots.unshift(packagesDir);
-      }
     }
   } catch {
     // monorepo not found — continue without it
