@@ -17,14 +17,14 @@ importers:
   .:
     dependencies:
       '@swissjs/compiler':
-        specifier: 1.2.1
-        version: 1.2.1
+        specifier: ^1.2.6
+        version: 1.2.6
       '@swissjs/core':
-        specifier: 1.2.1
-        version: 1.2.1
+        specifier: ^1.2.5
+        version: 1.2.5
       '@swissjs/plugin-file-router':
-        specifier: 1.2.3
-        version: 1.2.3
+        specifier: ^1.2.5
+        version: 1.2.5
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -437,14 +437,14 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@swissjs/compiler@1.2.1':
-    resolution: {integrity: sha512-dztDGxtbm82OXBEWO/+tPLtGBqknN+cxDGYTgIVWa9KAkpfkWf4H1aCrS5WOocIjTh54fEmK2Bl3E5/dqe5ZKg==}
+  '@swissjs/compiler@1.2.6':
+    resolution: {integrity: sha512-PcjbkUfS02iZIZGoTeMJRyPeoiVsFG76UEpmszlal6Pv02ABR0E9ryqbg9sqq26ZlJOl4vEUTU+egZNyCdXv5w==}
 
-  '@swissjs/core@1.2.1':
-    resolution: {integrity: sha512-b8F4MP2zuH9iTF6wpHp8qSsTRtG+XPR7c5oojaiB+FVqLPdNL+6s9CsoqbD83YiqjPBaE54eYHTOIoQKAZv+bg==}
+  '@swissjs/core@1.2.5':
+    resolution: {integrity: sha512-GDuhYS/7G0WCAmZhkXqn9d6If0uvP+jAbZMecYQT6XpCAVdqEQ+S+aQGhLgKe7AnfB0tdq7aoLsRN056TQ4r/g==}
 
-  '@swissjs/plugin-file-router@1.2.3':
-    resolution: {integrity: sha512-qsO852AmUCVehWrbpf9VYaW9YJhEzxOsi5tSCch1lkhBkrQyYAscFRNcQAUh8ex8c8uOz/2YBYxx10pBrqMJ0A==}
+  '@swissjs/plugin-file-router@1.2.5':
+    resolution: {integrity: sha512-FWQn+oL69qSa303CLB+kMeO0vvc0q74/fKbEqjChwufXyRSr8PDcjVKQe26FQHfGS1R7lZCriMUmcJl5h632EQ==}
 
   '@swissjs/security@1.2.1':
     resolution: {integrity: sha512-xg8rQ6loUebEJiqUOREOxMDNqTU/Kg1zv1VwrykEjIoPA8dl+75Ab1VhmnuG0OeQBPw3pZOemBkizZTbLrN1xg==}
@@ -1623,7 +1623,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@swissjs/compiler@1.2.1':
+  '@swissjs/compiler@1.2.6':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx': 7.29.7(@babel/core@7.29.7)
@@ -1635,14 +1635,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@swissjs/core@1.2.1':
+  '@swissjs/core@1.2.5':
     dependencies:
       '@swissjs/security': 1.2.1
       '@swissjs/shared': 1.2.1
 
-  '@swissjs/plugin-file-router@1.2.3':
+  '@swissjs/plugin-file-router@1.2.5':
     dependencies:
-      '@swissjs/core': 1.2.1
+      '@swissjs/core': 1.2.5
 
   '@swissjs/security@1.2.1': {}
 
