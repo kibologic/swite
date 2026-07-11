@@ -13,6 +13,7 @@ import { resolveFilePath } from "../../resolution/path/file-path-resolver.js";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { inlineEnvReferences } from "../../config/env.js";
 import { compilationCache } from "../../internal/cache/compilation-cache.js";
+import { rewriteCssImports } from "./css-imports.js";
 import type { SwiteUserConfig } from "../../config/config.js";
 
 export interface HandlerContext {
@@ -86,36 +87,8 @@ export class BaseHandler {
 
     compiled = inlineEnvReferences(compiled, this.context.env);
 
-    // Handle CSS imports:
-    // - Named/default imports (CSS modules): replace with const binding to empty object
-    //   so that apps using `import styles from "./x.module.css"` get {} instead of undefined.
-    // - Side-effect imports (import "./x.css"): strip silently — no runtime value needed.
-    // - Dynamic imports (import("./x.css")): return empty object.
     const beforeCss = compiled;
-    // Named/default imports → const <binding> = {}
-    compiled = compiled.replace(
-      /^[^\S\r\n]*import\s+((?:\w+\s*,?\s*)?(?:\{[^}]*\}\s*,?\s*)?(?:\*\s+as\s+\w+\s*)?)\bfrom\s*['"][^'"]*\.css['"]\s*;?[^\S\r\n]*$/gm,
-      (_match, binding) => {
-        // Extract identifiers from the binding clause and emit const declarations
-        const ids: string[] = [];
-        const defaultMatch = binding.match(/^(\w+)(?:\s*,|\s*$)/);
-        if (defaultMatch) ids.push(defaultMatch[1]);
-        const nsMatch = binding.match(/\*\s+as\s+(\w+)/);
-        if (nsMatch) ids.push(nsMatch[1]);
-        const namedMatch = binding.match(/\{([^}]+)\}/);
-        if (namedMatch) {
-          namedMatch[1].split(",").forEach((s: string) => {
-            const alias = s.trim().split(/\s+as\s+/).pop()?.trim();
-            if (alias) ids.push(alias);
-          });
-        }
-        return ids.length ? ids.map((id) => `const ${id} = {};`).join(" ") : "";
-      },
-    );
-    // Side-effect imports → strip
-    compiled = compiled.replace(/^[^\S\r\n]*import\s*['"][^'"]*\.css['"]\s*;?[^\S\r\n]*$/gm, "");
-    // Dynamic imports → empty object
-    compiled = compiled.replace(/\bimport\s*\(\s*['"][^'"]*\.css['"]\s*\)/g, "({})");
+    compiled = rewriteCssImports(compiled);
     if (beforeCss !== compiled) {
       const _debug = process.env["SWITE_DEBUG"] === "1";
       if (_debug) console.log(chalk.blue(`[${label}] Handled CSS imports from ${url}`));
