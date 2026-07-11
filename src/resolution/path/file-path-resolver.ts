@@ -103,12 +103,16 @@ export async function resolveFilePath(
     return path.join(path.resolve(root), urlPath); // fallback; handler will 404
   }
 
-  // /swiss-packages/ URLs point to files in the co-located framework monorepo's packages/ dir
+  // /swiss-packages/ URLs point to files inside the co-located framework
+  // monorepo, relative to its root -- packages are directly-named top-level
+  // directories (runtime/, compiler/, plugins/file-router/), not nested
+  // under a single packages/ directory. Must mirror toUrl()'s encoding in
+  // url-resolver.ts exactly.
   if (url.startsWith("/swiss-packages/")) {
     const relativePath = url.replace(/^\/swiss-packages\//, "");
     const monorepo = await findSwissLibMonorepo(root);
     if (monorepo) {
-      const fullPath = path.join(monorepo, "packages", relativePath);
+      const fullPath = path.join(monorepo, relativePath);
       try {
         await fs.access(fullPath);
         return fullPath;

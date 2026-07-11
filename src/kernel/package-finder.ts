@@ -6,6 +6,7 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { findMonorepoPackageDir } from "./monorepo-package-registry.js";
 
 /**
  * Dynamically find package directories by searching up the file tree
@@ -89,13 +90,17 @@ export async function findPackage(
     }
   }
 
-  // 3. Check co-located framework monorepo packages/ for any scoped package
+  // 3. Check co-located framework monorepo for any scoped package, matched by
+  // its real package.json `name` -- packages live as directly-named
+  // top-level directories (runtime/, compiler/, plugins/file-router/), and
+  // the directory name does not always match the package's unscoped name
+  // segment (`@swissjs/core` lives in `runtime/`, not `core/`), so this
+  // can't be derived by string-guessing a path.
   if (packageName.startsWith("@")) {
     const monorepo = await findSwissLibMonorepo(startPath);
     if (monorepo) {
-      const shortName = packageName.split("/")[1];
-      const monorepoPackage = path.join(monorepo, "packages", shortName);
-      if (await fileExists(path.join(monorepoPackage, "package.json"))) {
+      const monorepoPackage = await findMonorepoPackageDir(monorepo, packageName);
+      if (monorepoPackage) {
         return { path: monorepoPackage, type: 'swiss-lib' };
       }
     }
