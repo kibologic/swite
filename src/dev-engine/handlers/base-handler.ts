@@ -13,7 +13,6 @@ import { resolveFilePath } from "../../resolution/path/file-path-resolver.js";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { inlineEnvReferences } from "../../config/env.js";
 import { compilationCache } from "../../internal/cache/compilation-cache.js";
-import { fixSwissLibPaths } from "../../resolution/path/path-fixup.js";
 import type { SwiteUserConfig } from "../../config/config.js";
 
 export interface HandlerContext {
@@ -47,7 +46,7 @@ export class BaseHandler {
 
   /**
    * Shared compile-and-serve pipeline used by UIHandler and UIXHandler.
-   * Compiles a .ui/.uix file, rewrites imports, applies path fixup, and sends the response.
+   * Compiles a .ui/.uix file, rewrites imports, and sends the response.
    */
   protected async compileAndServe(
     url: string,
@@ -55,19 +54,13 @@ export class BaseHandler {
     res: Response,
     label: string,
   ): Promise<void> {
-    const pathFixupEnabled = this.context.userConfig?.compilerPathFixup?.enabled !== false;
-    const pathFixupPatterns = this.context.userConfig?.compilerPathFixup?.patterns;
-    const applyPathFixup = (code: string) =>
-      pathFixupEnabled ? fixSwissLibPaths(code, pathFixupPatterns) : code;
-
     // Cache hit
     const cached = await compilationCache.get(filePath, (c) => this.getDependencies(c));
     if (cached) {
-      const fixed = applyPathFixup(cached);
       setDevHeaders(res);
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      res.setHeader("Content-Length", Buffer.byteLength(fixed, "utf-8"));
-      res.end(fixed, "utf-8");
+      res.setHeader("Content-Length", Buffer.byteLength(cached, "utf-8"));
+      res.end(cached, "utf-8");
       return;
     }
 
@@ -81,10 +74,16 @@ export class BaseHandler {
       format: "esm",
       target: "esnext",
       sourcefile: filePath,
+      // FABLE-SW-001 recommendation 3: dev had zero source maps. Note this
+      // only maps back to post-UiCompiler intermediate code, not the original
+      // .uix source -- UiCompiler.compileAsync doesn't itself emit a source
+      // map to chain through, so full .uix-line-number fidelity is a deeper,
+      // separate compiler change. Still strictly better than the unmapped,
+      // esbuild-transformed-only output devtools showed before.
+      sourcemap: "inline",
     });
     compiled = tsResult.code;
 
-    compiled = applyPathFixup(compiled);
     compiled = inlineEnvReferences(compiled, this.context.env);
 
     // Handle CSS imports:
@@ -126,14 +125,13 @@ export class BaseHandler {
       console.warn(`[${label}] Compiled output contains bare imports: ${url}`);
     }
 
-    const rewritten = await rewriteImports(compiled, filePath, this.context.resolver);
-    const finalCode = applyPathFixup(rewritten);
+    const finalCode = await rewriteImports(compiled, filePath, this.context.resolver);
 
     await compilationCache.set(filePath, compiled, finalCode, (c) => this.getDependencies(c));
 
     if (BARE_IMPORT_RE.test(finalCode)) {
       console.error(`[${label}] Bare imports still present after rewriting: ${url}`);
-      for (const m of Array.from(rewritten.matchAll(/(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g)).slice(0, 3)) {
+      for (const m of Array.from(finalCode.matchAll(/(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g)).slice(0, 3)) {
         console.error(`[${label}] Unresolved import: ${m[1]}`);
       }
     }

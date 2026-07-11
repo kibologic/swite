@@ -101,6 +101,10 @@ export class TSHandler extends BaseHandler {
       format: "esm",
       target: "esnext",
       sourcefile: filePath,
+      // FABLE-SW-001 recommendation 3: dev had zero source maps, so browser
+      // devtools couldn't map compiled output back to real .ts source at all.
+      // Inline is simplest for dev (no separate map-file serving/CORS to wire up).
+      sourcemap: "inline",
     });
 
     const inlined = inlineEnvReferences(result.code, this.context.env);

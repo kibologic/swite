@@ -11,6 +11,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write  # required for npm Trusted Publishing (OIDC)
 
 jobs:
   release:
@@ -27,12 +28,24 @@ jobs:
         with:
           version: 10
 
+      # This only affects the CI tooling runtime, not the published package's
+      # own `engines` requirement.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
+
+      # npm Trusted Publishing (OIDC) requires npm >=11.5.1; the bundled
+      # version on this runner/Node setup is older. Pinned to the npm 11.x
+      # major (not `npm@latest`): a prior version of this step used
+      # `npm@latest`, which silently breaks this workflow whenever npm ships
+      # a new major raising its own Node requirement past what this job's
+      # Node version supports (as npm 12 just did) -- a floating tag for a
+      # required piece of release tooling should be pinned, not chased.
+      - name: Update npm for Trusted Publishing support
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -40,6 +53,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # No NODE_AUTH_TOKEN: publishing uses npm Trusted Publishing (OIDC),
+      # configured per-package on npmjs.com to trust this exact repo +
+      # workflow file. Leaving a token env var here would make npm prefer
+      # the token over OIDC.
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
@@ -50,4 +67,3 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -53,16 +53,6 @@ export interface SwiteUserConfig {
    * Defaults to ['swiss-lib']. Override when your framework lives in a differently-named repo.
    */
   siblingRepositories?: string[];
-  /**
-   * Control the compiler path fixup that rewrites `/swiss-lib/` → `/swiss-packages/`.
-   * Disable entirely or supply custom from/to pairs when your project uses different paths.
-   */
-  compilerPathFixup?: {
-    /** When false, no path fixup is applied. Defaults to true for backward compatibility. */
-    enabled?: boolean;
-    /** Custom replacement patterns. Defaults to the built-in swiss-lib → swiss-packages pairs. */
-    patterns?: Array<{ from: string; to: string }>;
-  };
 }
 
 /**
