@@ -8,26 +8,6 @@
   transform path and the post-`UiCompiler` `.ui`/`.uix` transform path. Dev
   builds previously shipped zero source maps, so devtools couldn't map
   compiled output back to source.
-- Fix the `/swiss-packages/` URL scheme, which had silently stopped working after the co-located swiss-lib monorepo was flattened from `packages/<pkg>/` to directly-named top-level directories (`runtime/`, `compiler/`, `plugins/file-router/`).
-
-  Two compounding bugs, both in `url-resolver.ts`'s `toUrl()`:
-
-  - The monorepo package lookup still assumed a `packages/` subdirectory that no longer exists, so it never matched any real file.
-  - More fundamentally, the whole absolute-path branch containing that lookup sat _after_ an earlier `startsWith("/")` early-return meant to pass through already-resolved URLs — but every absolute filesystem path also starts with `/` and is textually indistinguishable from a resolved URL at that point, so the early-return swallowed every unresolved absolute path first. That branch was unreachable dead code for any actual absolute `filePath`.
-
-  The practical symptom: any swiss-lib source file not already reachable through the node_modules symlink registry (e.g. a package not yet linked, or one added mid-session) had its raw absolute filesystem path — containing the monorepo's own directory name, e.g. `/home/.../swiss-lib/...` — leaked to the browser as if it were a URL. `resolveFilePath()`'s decode side had the matching `packages/`-subdirectory assumption, so even a correctly-formed `/swiss-packages/...` URL would fail to resolve back to a real file.
-
-  Fixes:
-
-  - Added `monorepo-package-registry.ts`, which maps a package's real `package.json` name to its actual directory by reading each candidate directory's manifest, rather than guessing a directory name from the package's unscoped name segment (`@swissjs/core` lives in `runtime/`, not `core/` — string-guessing was already wrong for this exact package before the `packages/` restructuring was even a factor).
-  - Moved the monorepo/`/swiss-packages/` resolution into the reachable absolute-path branch of `toUrl()`, ahead of the `startsWith("/")` early-return.
-  - Updated `resolveFilePath()`'s `/swiss-packages/` decode to match the new encoding (monorepo-root-relative, not `packages/`-relative).
-  - Removed the `fixSwissLibPaths` patch (and its `compilerPathFixup` config option) that had been band-aiding the resulting leaked paths downstream instead of fixing the actual source.
-  - Removed two dead regex-based "safety net" fallback passes in `import-rewriter.ts` (confirmed via a full session's real dev-server traffic — every module, hundreds of imports — that neither ever fired; the primary es-module-lexer-based rewrite already handles everything they were guarding against). A genuine unrewritten bare import now throws instead of triggering a blind whole-file string replace, which could otherwise corrupt matching substrings inside unrelated string literals or comments.
-  - Removed a vestigial cache-invalidation check in `compilation-cache.ts` for "stale CDN URLs from before the import rewriter fix" — dead in practice (the cache is in-memory and clears on restart) and would have permanently defeated caching for anyone legitimately opting into CDN fallback via `SWITE_CDN_FALLBACK_SCOPES`.
-  - Fixed a stale doc comment in `cdn-fallback.ts` that described the opposite of what the (correct, safe) code actually does.
-
-  Covered by a new regression test suite verifying the `/swiss-packages/` encode/decode round-trip against a synthetic monorepo with the current (flattened, name-mismatched) directory layout.
 
 ## 0.4.2
 
