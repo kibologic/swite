@@ -1,0 +1,22 @@
+# Branch workflow policy (kibologic/registry/docs/operations/branch-workflow-policy.md):
+# no direct commits to development, staging, or main. Work on feature/<name>
+# or fix/<name>, land via PR. Merge commits (git merge, or a PR merge pulled
+# locally) are exempt -- this only blocks hand-typed commits on these branches.
+protected="development staging main"
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+for b in $protected; do
+  if [ "$current_branch" = "$b" ]; then
+    if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+      break
+    fi
+    if [ -n "$ALLOW_DIRECT_COMMIT" ]; then
+      echo "WARNING: direct commit to protected branch '$current_branch' allowed via ALLOW_DIRECT_COMMIT override."
+      break
+    fi
+    echo "ERROR: direct commits to '$current_branch' are not allowed."
+    echo "  Required flow: feature/<name> -> PR -> development -> PR -> staging -> PR -> main"
+    echo "  See: kibologic/registry/docs/operations/branch-workflow-policy.md"
+    echo "  Create a feature branch instead: git checkout -b feature/<name>"
+    exit 1
+  fi
+done
