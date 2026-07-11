@@ -96,17 +96,6 @@ export class CompilationCache {
       }
     }
 
-    // Check if cached content has stale CDN URLs (from before import rewriter fix)
-    if (entry.rewritten.includes("cdn.jsdelivr.net") || entry.rewritten.includes("esm.sh")) {
-      console.log(
-        chalk.yellow(
-          `[Cache] Invalidating ${filePath}: contains stale CDN URLs`,
-        ),
-      );
-      this.cache.delete(filePath);
-      return null;
-    }
-
     console.log(chalk.green(`[Cache] ✅ Cache hit for ${filePath}`));
     return entry.rewritten;
   }
@@ -120,9 +109,11 @@ export class CompilationCache {
     rewritten: string,
     getDependencies: (compiled: string) => Promise<string[]>,
   ): Promise<void> {
-    // Enforce max size (LRU eviction)
+    // Enforce max size (FIFO eviction — Map iteration order is insertion
+    // order, so this is oldest-inserted, not least-recently-used; a real LRU
+    // would need to re-insert on every `get()` hit to refresh recency)
     if (this.cache.size >= this.maxSize) {
-      // Remove oldest entry (simple FIFO)
+      // Remove oldest entry
       const firstKey = this.cache.keys().next().value;
       if (firstKey) {
         this.cache.delete(firstKey);

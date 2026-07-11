@@ -106,43 +106,27 @@ export async function rewriteImports(
       result = result.slice(0, start) + text + result.slice(end);
     }
 
-    // Safety net: catch any bare scoped imports the lexer may have missed
+    // Every import es-module-lexer reports is handled by the loop above
+    // (resolved, CDN-fallback-redirected, or diagnosed as invalid) — there
+    // is no remaining class of import this function silently leaves
+    // untouched. A prior version carried two additional regex-based "safety
+    // net" passes for cases "the lexer may have missed"; across a full dev
+    // session's real traffic (every module, hundreds of imports) neither
+    // ever fired, and logically the lexer already parses every import/
+    // export/dynamic-import form these passes were guarding against. If the
+    // check below ever fires, that's a genuine parse gap — surface it
+    // instead of silently patching text (a blind whole-file string replace
+    // can corrupt matching substrings inside unrelated string literals or
+    // comments).
     const barePattern = /(?:import|from|export)\s+['"](@[^'"]+\/[^'"]+)[^'"]*['"]/g;
     for (const match of Array.from(result.matchAll(barePattern))) {
       const bareImport = match[1];
       if (!bareImport.startsWith("/") && !bareImport.startsWith("http") && !bareImport.startsWith(".")) {
-        console.error(chalk.red(`[SWITE] import-rewriter: CRITICAL — bare import "${bareImport}" still present after rewriting`));
-        const replacement = shouldUseCdnFallback(bareImport)
-          ? `https://cdn.jsdelivr.net/npm/${bareImport}/+esm`
-          : `/node_modules/${bareImport}`;
-        result = result.replace(
-          new RegExp(bareImport.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-          replacement,
+        throw new Error(
+          `[SWITE] import-rewriter: bare import "${bareImport}" survived rewriting in ${importer} — es-module-lexer did not report it as an import; this points at a genuine parser/compiler gap, not something to paper over.`,
         );
       }
     }
-
-    // Regex fallback: fix relative .js/.tsx extension mismatches the lexer may have missed
-    const normalizedImporter = importer.replace(/\\/g, "/");
-    const isSwissPackage = normalizedImporter.includes("/swiss-packages/");
-    const isUixFile = normalizedImporter.endsWith(".uix") || normalizedImporter.endsWith(".ui");
-
-    result = result.replace(
-      /from\s+(["'])(\.\.?\/[^"']*?)(\.js|\.tsx)(\1)/g,
-      (match, quote, importPath, _ext, endQuote) => {
-        if (importPath.includes("node_modules") || !importPath.startsWith(".")) return match;
-        const isLibPath = normalizedImporter.includes("/lib/");
-        let newExt: string;
-        if (isSwissPackage || isLibPath) {
-          newExt = ".ts";
-        } else if (isUixFile) {
-          newExt = normalizedImporter.endsWith(".ui") ? ".ui" : ".uix";
-        } else {
-          newExt = ".ts";
-        }
-        return `from ${quote}${importPath}${newExt}${endQuote}`;
-      },
-    );
 
     return result;
   } catch (error) {

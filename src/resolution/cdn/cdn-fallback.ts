@@ -2,9 +2,11 @@
  * CDN fallback policy.
  *
  * Swite can fall back to jsDelivr (+esm) for packages it can't resolve locally.
- * This must be safe and project-agnostic:
- * - Unscoped packages (e.g. "react") are usually public on npm; allow by default.
- * - Scoped packages (e.g. "@scope/pkg") may be private; do NOT CDN-fallback by default.
+ * This must be safe and project-agnostic, so CDN fallback is deny-by-default:
+ * - Unscoped packages (e.g. "react") are NEVER CDN-eligible — there is no
+ *   allowlist mechanism for them at all, regardless of env config.
+ * - Scoped packages (e.g. "@scope/pkg") may be private; only CDN-fallback when
+ *   their scope is explicitly opted in.
  *
  * Opt-in:
  * - Set `SWITE_CDN_FALLBACK_SCOPES` to a comma-separated list of scopes to allow,

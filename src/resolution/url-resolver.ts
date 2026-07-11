@@ -69,6 +69,61 @@ export async function toUrl(
       return normalizeResult(url);
     }
 
+    // Check if the file lives inside a co-located framework monorepo. Serve
+    // those files under /swiss-packages/ so the browser can request them
+    // distinctly from the app's own files. Packages are directly-named
+    // top-level directories of the monorepo (runtime/, compiler/,
+    // plugins/file-router/) rather than nested under a single packages/
+    // directory, so the monorepo root itself -- not a packages/ subpath
+    // that may not exist -- is what /swiss-packages/ URLs are relative to.
+    //
+    // This check (and the workspace/app-root checks below it) must run
+    // inside this same `if (path.isAbsolute(filePath))` block, before the
+    // startsWith("/") early-return two blocks down: that check exists to
+    // pass through paths that are ALREADY resolved URLs, but every absolute
+    // filesystem path ALSO starts with "/" and is textually indistinguishable
+    // from one -- so it swallows unresolved absolute paths too. Any
+    // absolute-path handling placed after that early-return is unreachable
+    // dead code; a previous version of this function had exactly that bug,
+    // silently leaking raw absolute filesystem paths (containing the
+    // monorepo's own directory name, e.g. "/swiss-lib/...") to the browser
+    // as if they were URLs whenever none of the checks in THIS block matched.
+    const monorepo = await findSwissLibMonorepo(context.root);
+    if (monorepo) {
+      let resolvedMonorepo: string;
+      let resolvedFilePath: string;
+      try {
+        resolvedMonorepo = await fs.realpath(monorepo);
+        resolvedFilePath = await fs.realpath(filePath);
+      } catch {
+        resolvedMonorepo = path.resolve(monorepo);
+        resolvedFilePath = path.resolve(filePath);
+      }
+
+      const normalizedMonorepo = resolvedMonorepo.replace(/\\/g, "/").toLowerCase();
+      const normalizedResolvedFile = resolvedFilePath.replace(/\\/g, "/").toLowerCase();
+
+      if (normalizedResolvedFile.startsWith(normalizedMonorepo)) {
+        const origMonorepo = resolvedMonorepo.replace(/\\/g, "/");
+        const origFile = resolvedFilePath.replace(/\\/g, "/");
+        const relative = origFile.slice(origMonorepo.length);
+        const url = "/swiss-packages" + (relative.startsWith("/") ? relative : "/" + relative);
+
+        if (url.includes("/dist/") && !url.includes("/src/")) {
+          const srcUrl = url.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
+          const srcRelative = srcUrl.replace("/swiss-packages/", "");
+          const srcFilePath = path.join(monorepo, srcRelative);
+          if (await context.fileExists(srcFilePath)) {
+            console.log(`[SWITE] toUrl: abs→swiss-packages URL (src): ${filePath} → ${srcUrl}`);
+            return normalizeResult(srcUrl);
+          }
+        }
+
+        console.log(`[SWITE] toUrl: abs→swiss-packages URL: ${filePath} → ${url}`);
+        return normalizeResult(url);
+      }
+    }
+
     // Convert absolute workspace/app paths to browser-relative URLs before the
     // startsWith("/") early-return below treats them as already-resolved URLs.
     // e.g. /app/modules/pos/src/index.ui → /modules/pos/src/index.ui
@@ -78,7 +133,19 @@ export async function toUrl(
       const wsRoot = path.resolve(workspaceRootForAbs).replace(/\\/g, "/");
       if (normalizedLower.startsWith(wsRoot.toLowerCase() + "/") || normalizedLower === wsRoot.toLowerCase()) {
         const relative = normalized.slice(wsRoot.length);
-        const url = relative.startsWith("/") ? relative : "/" + relative;
+        let url = relative.startsWith("/") ? relative : "/" + relative;
+
+        // Prefer src over dist for workspace packages in dev
+        if (url.includes("/packages/") && url.includes("/dist/") && !(await context.fileExists(filePath))) {
+          const srcPath = filePath
+            .replace(/[/\\]dist[/\\]/, path.sep + "src" + path.sep)
+            .replace(/\.js$/i, ".ts");
+          if (await context.fileExists(srcPath)) {
+            const srcRelative = path.relative(workspaceRootForAbs, srcPath).replace(/\\/g, "/");
+            url = "/" + srcRelative;
+          }
+        }
+
         console.log(`[SWITE] toUrl: abs→workspace URL: ${filePath} → ${url}`);
         return normalizeResult(url);
       }
@@ -105,112 +172,6 @@ export async function toUrl(
       }
     }
     return normalizeResult(normalized);
-  }
-
-  // If path is absolute, convert to a browser-relative URL
-  if (path.isAbsolute(filePath)) {
-    const workspaceRoot = await context.getWorkspaceRoot();
-
-    // Check if the file lives in a co-located framework monorepo's packages/ directory.
-    // Serve those files under /swiss-packages/ so the browser can request them distinctly
-    // from the app's own files. Works for any framework at any directory name.
-    const monorepo = await findSwissLibMonorepo(context.root);
-    if (monorepo) {
-      const packagesPath = path.join(monorepo, "packages");
-
-      let resolvedPackages: string;
-      let resolvedFilePath: string;
-      try {
-        resolvedPackages = await fs.realpath(packagesPath);
-        resolvedFilePath = await fs.realpath(filePath);
-      } catch {
-        resolvedPackages = path.resolve(packagesPath);
-        resolvedFilePath = path.resolve(filePath);
-      }
-
-      const normalizedPackages = resolvedPackages.replace(/\\/g, "/").toLowerCase();
-      const normalizedResolved = resolvedFilePath.replace(/\\/g, "/").toLowerCase();
-
-      if (normalizedResolved.startsWith(normalizedPackages)) {
-        const origPackages = resolvedPackages.replace(/\\/g, "/");
-        const origFile = resolvedFilePath.replace(/\\/g, "/");
-        const relative = origFile.slice(origPackages.length);
-        const url = "/swiss-packages" + (relative.startsWith("/") ? relative : "/" + relative);
-
-        if (url.includes("/dist/") && !url.includes("/src/")) {
-          const srcUrl = url.replace("/dist/", "/src/").replace(/\.js$/, ".ts");
-          const srcRelative = srcUrl.replace("/swiss-packages/", "");
-          const srcFilePath = path.join(packagesPath, srcRelative);
-          if (await context.fileExists(srcFilePath)) {
-            return normalizeResult(srcUrl);
-          }
-        }
-
-        return normalizeResult(url);
-      }
-    }
-
-    // node_modules absolute path → browser /node_modules/... URL
-    const origFilePathNormalized = path.resolve(filePath).replace(/\\/g, "/");
-    if (origFilePathNormalized.toLowerCase().includes("/node_modules/")) {
-      const nodeModulesIndex = origFilePathNormalized.toLowerCase().indexOf("/node_modules/");
-      const afterNodeModules = origFilePathNormalized.slice(nodeModulesIndex + "/node_modules/".length);
-      return normalizeResult("/node_modules/" + afterNodeModules);
-    }
-
-    const normalizedFilePath = path.resolve(filePath).replace(/\\/g, "/").toLowerCase();
-
-    // Try relative to app root first
-    const normalizedRoot = path.resolve(context.root).replace(/\\/g, "/").toLowerCase();
-    if (normalizedFilePath.startsWith(normalizedRoot)) {
-      const origRoot = path.resolve(context.root).replace(/\\/g, "/");
-      const origFilePath = path.resolve(filePath).replace(/\\/g, "/");
-      const relative = origFilePath.slice(origRoot.length);
-      return normalizeResult(relative.startsWith("/") ? relative : "/" + relative);
-    }
-
-    // Try workspace root
-    if (workspaceRoot) {
-      const normalizedWorkspaceRoot = path.resolve(workspaceRoot).replace(/\\/g, "/").toLowerCase();
-
-      if (normalizedFilePath.startsWith(normalizedWorkspaceRoot)) {
-        const origWorkspaceRoot = path.resolve(workspaceRoot).replace(/\\/g, "/");
-        const origFilePath = path.resolve(filePath).replace(/\\/g, "/");
-        const relative = origFilePath.slice(origWorkspaceRoot.length);
-        let url = relative.startsWith("/") ? relative : "/" + relative;
-
-        // Prefer src over dist for workspace packages in dev
-        if (url.includes("/packages/") && url.includes("/dist/") && !(await context.fileExists(filePath))) {
-          const srcPath = filePath
-            .replace(/[/\\]dist[/\\]/, path.sep + "src" + path.sep)
-            .replace(/\.js$/i, ".ts");
-          if (await context.fileExists(srcPath)) {
-            const srcRelative = path.relative(workspaceRoot, srcPath).replace(/\\/g, "/");
-            url = "/" + srcRelative;
-          }
-        }
-
-        return normalizeResult(url);
-      }
-    }
-
-    // Fallback
-    const baseRoot = workspaceRoot || context.root;
-    const rawRelative = path.relative(baseRoot, filePath);
-    // CG-03: guard against absolute result from path.relative() on cross-drive/WSL paths
-    let url: string;
-    if (path.isAbsolute(rawRelative) || rawRelative.startsWith("..")) {
-      const normalizedBase = path.resolve(baseRoot).replace(/\\/g, "/");
-      const normalizedFile = path.resolve(filePath).replace(/\\/g, "/");
-      const stripped = normalizedFile.startsWith(normalizedBase)
-        ? normalizedFile.slice(normalizedBase.length)
-        : "/" + normalizedFile;
-      url = stripped.startsWith("/") ? stripped : "/" + stripped;
-    } else {
-      url = "/" + rawRelative.replace(/\\/g, "/");
-    }
-    console.warn(`[SWITE] toUrl fallback: ${filePath} -> ${url}`);
-    return normalizeResult(url);
   }
 
   // Default: make relative to root
