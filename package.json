@@ -1,6 +1,6 @@
 {
   "name": "@swissjs/swite",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "SWITE - SWISS Development Server (Vite replacement)",
   "type": "module",
   "main": "dist/index.js",
