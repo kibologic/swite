@@ -10,6 +10,7 @@ import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { inlineEnvReferences } from "../../config/env.js";
 import { compilationCache } from "../../internal/cache/compilation-cache.js";
+import { rewriteCssImports } from "./css-imports.js";
 import {
   BaseHandler,
   setDevHeaders,
@@ -108,8 +109,9 @@ export class TSHandler extends BaseHandler {
     });
 
     const inlined = inlineEnvReferences(result.code, this.context.env);
+    const cssHandled = rewriteCssImports(inlined);
     const rewritten = await rewriteImports(
-      inlined,
+      cssHandled,
       filePath,
       this.context.resolver,
     );

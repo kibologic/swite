@@ -8,6 +8,7 @@ import type { Response } from "express";
 import { promises as fs } from "node:fs";
 import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
+import { rewriteCssImports } from "./css-imports.js";
 import {
   BaseHandler,
   setDevHeaders,
@@ -104,8 +105,9 @@ export class JSHandler extends BaseHandler {
       }
     }
 
+    const cssHandled = rewriteCssImports(source);
     const rewritten = await rewriteImports(
-      source,
+      cssHandled,
       filePath,
       this.context.resolver,
     );
