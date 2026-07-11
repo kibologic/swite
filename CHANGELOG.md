@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.5
+
+### Patch Changes
+
+- Fix CSS imports (`import styles from './x.module.css'`, side-effect `import './x.css'`, dynamic `import('./x.css')`) not being handled at all when they appear in plain `.ts`, `.js`, or `.mjs` files — only `.ui`/`.uix` files (served through `base-handler.ts`) had this handling. A raw `import` of a `.css` file is not valid JS, so any of those three handlers serving a file that imported CSS would have passed the import straight through to the browser, resulting in a module parse error or a 404/wrong-MIME-type response depending on routing.
+
+  Not currently exercised anywhere in the wild (no `.ts`/`.js` file in the app repos imports CSS directly today, only `.ui`/`.uix` do), but a real, live landmine and an unjustified inconsistency between handlers that should behave the same way for the same import.
+
+  Extracted the existing CSS-rewriting logic into a shared `rewriteCssImports()` helper and applied it consistently in `ts-handler.ts`, `js-handler.ts`, and `mjs-handler.ts` as well as `base-handler.ts`. Covered by a new focused unit test suite for the helper.
+
 ## 0.4.4
 
 ### Patch Changes
