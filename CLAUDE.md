@@ -1,5 +1,24 @@
 # Claude Code — swite (SwissJS dev server & build engine)
 
+> 🔀 **Article 20 — Assume another agent is working right now.** This monorepo is worked by multiple
+> agents **concurrently and continuously**. Operate on that assumption at all times, not only when
+> another agent's activity is visible.
+>
+> **All work happens on a feature branch cut fresh from `development`. Never commit directly to
+> `development`/`staging`/`main` — not even locally. Every merge is a PR. Rebase onto current
+> `development` before merge; never force-push a shared branch.**
+>
+> `git fetch` before you start — `development` has almost certainly moved. Check
+> `git branch --show-current` before every commit. Delete your branch after merge. Push immediately
+> after committing — work on one machine is invisible to every other agent.
+>
+> **Uncommitted changes you did not make belong to another agent.** Never stash, revert, commit, or
+> force your way around them. Stop and report — a dirty tree you did not dirty is a signal, not an
+> obstacle.
+>
+> Full doctrine: `registry/fable/FABLE-DOCTRINE-002-concurrent-agent-discipline.md`
+
+
 > 🧭 **Article 18 — SwissJS evolves from its own architecture, never by imitation.** Design
 > decisions originate from the SwissJS architecture and concrete Alpine requirements. **Never
 > introduce an API, abstraction or capability because another framework has it. Feature parity with
