@@ -1,5 +1,13 @@
 # Claude Code — swite (SwissJS dev server & build engine)
 
+> 📍 **START HERE — `registry/operations/HANDOFF.md`.** One canonical handoff, **updated in place,
+> never duplicated.** It carries current state, what each role does next, and what is blocked on the
+> operator. **Both the Architecture and Implementation roles read all of it** — same context, different
+> sections to act on. When your session ends or context runs low, **update that file** (state, next
+> moves, blocked items) and push; do **not** create a new dated or role-suffixed handoff. If you needed
+> the previous conversation to get oriented, that is a defect in the handoff — fix it there.
+
+
 > 🔀 **Article 20 — Assume another agent is working right now.** This monorepo is worked by multiple
 > agents **concurrently and continuously**. Operate on that assumption at all times, not only when
 > another agent's activity is visible.
