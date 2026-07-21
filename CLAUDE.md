@@ -1,5 +1,14 @@
 # Claude Code — swite (SwissJS dev server & build engine)
 
+> 🧭 **Article 18 — SwissJS evolves from its own architecture, never by imitation.** Design
+> decisions originate from the SwissJS architecture and concrete Alpine requirements. **Never
+> introduce an API, abstraction or capability because another framework has it. Feature parity with
+> any external ecosystem is explicitly not a goal**, and resemblance to one is not evidence of
+> correctness. Reason from this ecosystem's own primitives — the compiler, `.ui`/`.uix` files, the
+> integrated runtime, the Alpine-first architecture. Those are the differentiator; imitation would
+> discard the reason SwissJS exists. If a capability is required, we build it; if not, we don't.
+
+
 **This is build infrastructure**, consumed by every product's dev server and production build.
 Article 16 applies with full force: a broken build surfaces as an application symptom, so attribute
 before fixing.
