@@ -550,7 +550,30 @@ export async function setupSPAFallback(
 
     // Only serve SPA HTML for real navigation/document requests.
     // If a script/style/module fetch hits the fallback, returning HTML causes strict MIME failures.
-    if (!accept.includes("text/html")) {
+    //
+    // EXCEPTION: the literal document root ("/") is exempt from the Accept check.
+    // Unlike a deep unmatched path, "/" is never ambiguous -- nothing in this
+    // dev server ever mounts an API, health check, or proxy target at the bare
+    // root, so a request for "/" can only ever mean "give me the app". Skipping
+    // the check here fixes non-browser clients (container health checks, uptime
+    // monitors, curl-based smoke tests, some proxies) that don't send an Accept
+    // header favoring text/html -- they were getting a false-negative 404 on the
+    // app root even though the app is running. Browsers were never affected;
+    // they always send text/html in Accept, so this exception changes nothing
+    // for them.
+    //
+    // This exception does NOT extend to other extensionless paths (e.g.
+    // "/some/random/path", "/healthz", "/ready"). Those ARE genuinely ambiguous:
+    // they could be a client-side SPA route, but they could just as easily be a
+    // misrouted health-check/proxy target or an API path that isn't the app at
+    // all. For those, a non-HTML Accept header is a meaningful signal that the
+    // caller isn't a browser expecting a document, and 404 is the safer,
+    // more debuggable default (fails loud instead of silently handing back an
+    // HTML document to a client that likely wanted JSON or plain text). Browser
+    // navigation to those routes is unaffected either way, since browsers
+    // already satisfy the Accept check and get the SPA shell today.
+    const isDocumentRoot = url === "/";
+    if (!isDocumentRoot && !accept.includes("text/html")) {
       res.status(404).setHeader("Content-Type", "text/plain");
       res.send(`Not found: ${url}`);
       return;
