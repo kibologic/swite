@@ -8,6 +8,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
 import { findSwissLibMonorepo, findPackage } from "../../kernel/package-finder.js";
+import { getLogger } from "../../internal/logger.js";
+
+const log = getLogger("resolve");
 
 export interface PathResolverContext {
   root: string;
@@ -56,12 +59,12 @@ export async function resolveFilePath(
             const srcPath = fullPath.replace("/dist/", "/src/").replace(/\.[mc]?js$/, ".ts");
             try {
               await fs.access(srcPath);
-              console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local src: ${srcPath}`);
+              log.debug(`Intercept: ${packageName} redirecting to local src: ${srcPath}`);
               return srcPath;
             } catch { /* Fallback to dist if src not found */ }
           }
           
-          console.log(`[file-path-resolver] Intercept: ${packageName} redirecting to local source: ${fullPath}`);
+          log.debug(`Intercept: ${packageName} redirecting to local source: ${fullPath}`);
           return fullPath;
         }
       }
@@ -121,7 +124,7 @@ export async function resolveFilePath(
       }
     }
     // No co-located monorepo found — return a path that will 404 cleanly
-    console.warn(`[file-path-resolver] No framework monorepo found for /swiss-packages/${relativePath}`);
+    log.warn(`No framework monorepo found for /swiss-packages/${relativePath}`);
     return path.join(root, "node_modules", relativePath);
   }
 
@@ -152,8 +155,8 @@ export async function resolveFilePath(
           await fs.access(libDir);
           // Found SWS root!
           const resolved = path.join(current, urlPath);
-          console.log(`[file-path-resolver] Found SWS root with lib/: ${current}`);
-          console.log(`[file-path-resolver] Resolving ${url} from SWS root: ${current} -> ${resolved}`);
+          log.debug(`Found SWS root with lib/: ${current}`);
+          log.debug(`Resolving ${url} from SWS root: ${current} -> ${resolved}`);
           return resolved;
         } catch {
           // Continue searching up
@@ -179,17 +182,17 @@ export async function resolveFilePath(
           const srcResolved = path.join(wsRoot, srcUrl);
           try {
             await fs.access(srcResolved);
-            console.log(`[file-path-resolver] dist not found, serving src: ${resolved} -> ${srcResolved}`);
+            log.debug(`dist not found, serving src: ${resolved} -> ${srcResolved}`);
             return srcResolved;
           } catch {
             // Keep original resolved; handler will 404
           }
         }
       }
-      console.log(`[file-path-resolver] Resolving ${url} from workspace root: ${wsRoot} -> ${resolved}`);
+      log.debug(`Resolving ${url} from workspace root: ${wsRoot} -> ${resolved}`);
       return resolved;
     } else {
-      console.warn(`[file-path-resolver] No workspace root found, using app root: ${root}`);
+      log.debug(`no workspace root found, using app root: ${root}`);
       return path.join(root, urlPath);
     }
   }

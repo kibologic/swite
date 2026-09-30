@@ -9,8 +9,10 @@ import type { BuildOptions } from "esbuild";
 import { UiCompiler } from "@swissjs/compiler";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
 import { ModuleResolver } from "../resolution/resolver.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("build");
 
 export interface BuildConfig {
   root: string;
@@ -46,7 +48,7 @@ export class SwiteBuilder {
 
   async build(): Promise<void> {
     const startTime = Date.now();
-    console.log(chalk.cyan("\n⚡ SWITE - Production Build\n"));
+    log.info("Production build");
 
     const tempDir = path.join(this.config.root, ".swite-build");
     try {
@@ -56,9 +58,9 @@ export class SwiteBuilder {
       await this.copyPublicAssets();
 
       const duration = Date.now() - startTime;
-      console.log(chalk.green(`\n[OK] Build completed in ${duration}ms\n`));
+      log.info(`Build completed in ${duration}ms`);
     } catch (error) {
-      console.error(chalk.red("\n[FAIL] Build failed:"), error);
+      log.error("Build failed:", error);
       throw error;
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
@@ -66,13 +68,13 @@ export class SwiteBuilder {
   }
 
   private async cleanOutputDir(): Promise<void> {
-    console.log(chalk.blue("[clean] Cleaning output directory..."));
+    log.info("Cleaning output directory");
     await fs.rm(this.config.outDir, { recursive: true, force: true });
     await fs.mkdir(this.config.outDir, { recursive: true });
   }
 
   private async compileSwissFiles(tempDir: string): Promise<void> {
-    console.log(chalk.blue("[compile] Compiling Swiss files..."));
+    log.info("Compiling Swiss files");
     await fs.mkdir(tempDir, { recursive: true });
 
     const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
@@ -90,7 +92,7 @@ export class SwiteBuilder {
     // Step 2: Discover and compile workspace dependencies
     const workspaceDeps = await this.discoverWorkspaceDependencies();
     for (const dep of workspaceDeps) {
-      console.log(chalk.blue(`[bundle] Compiling dependency: ${dep.name}`));
+      log.debug(`Compiling dependency: ${dep.name}`);
       // Preserve workspace structure: libraries/skltn/src or packages/cart/src or modules/cart/src
       const depRelativeToWorkspace = workspaceRoot
         ? path.relative(workspaceRoot, dep.pkgDir)
@@ -142,7 +144,7 @@ export class SwiteBuilder {
 
       await fs.writeFile(outputPath, compiled, "utf-8");
 
-      console.log(chalk.gray(`  ✓ [${label}] ${relativePath}`));
+      log.debug(`  [${label}] ${relativePath}`);
     }
 
     // Copy .ts files and rewrite .ui/.uix imports to .tsx
@@ -268,8 +270,8 @@ export class SwiteBuilder {
                     srcDir,
                     pkgDir,
                   });
-                  console.log(
-                    chalk.gray(`  [dep] Found workspace dependency: ${depName}`),
+                  log.debug(
+                    `Found workspace dependency: ${depName}`,
                   );
                   break;
                 }
@@ -313,10 +315,8 @@ export class SwiteBuilder {
                   srcDir,
                   pkgDir,
                 });
-                console.log(
-                  chalk.gray(
-                    `  [dep] Discovered transitive dependency: ${pkgName}`,
-                  ),
+                log.debug(
+                  `Discovered transitive dependency: ${pkgName}`,
                 );
                 break;
               }
@@ -325,14 +325,14 @@ export class SwiteBuilder {
         }
       }
     } catch (error) {
-      console.warn(chalk.yellow("[warn] Could not discover dependencies:"), error);
+      log.warn("Could not discover dependencies:", error);
     }
 
     return deps;
   }
 
   private async bundle(tempDir: string): Promise<void> {
-    console.log(chalk.blue("[bundle] Bundling with esbuild..."));
+    log.info("Bundling with esbuild");
 
     const workspaceRoot = await this.findWorkspaceRoot(this.config.root);
     const appRelativeToWorkspace = workspaceRoot
@@ -548,8 +548,8 @@ export class SwiteBuilder {
                   }
                 }
               } catch (err) {
-                console.warn(
-                  `[SWITE] Error calculating relative path for ${matchingDep.name}:`,
+                log.warn(
+                  `Error calculating relative path for ${matchingDep.name}:`,
                   err,
                 );
                 depRelativeToWorkspace = "";
@@ -559,8 +559,8 @@ export class SwiteBuilder {
               const subPath = args.path.replace(matchingDep.name + "/", "");
 
               // Log for debugging
-              console.log(
-                `[SWITE] Resolving ${args.path} -> subPath: ${subPath} from ${matchingDep.name} (${depRelativeToWorkspace || "root"})`,
+              log.debug(
+                `Resolving ${args.path} -> subPath: ${subPath} from ${matchingDep.name} (${depRelativeToWorkspace || "root"})`,
               );
 
               // Try to resolve the subpath
@@ -661,8 +661,8 @@ export class SwiteBuilder {
                     }
                   } catch (err) {
                     // Fallback to index
-                    console.warn(
-                      `[SWITE] Error reading exports for ${matchingDep.name}:`,
+                    log.warn(
+                      `Error reading exports for ${matchingDep.name}:`,
                       err,
                     );
                   }
@@ -717,7 +717,7 @@ export class SwiteBuilder {
                 }
               }
             } catch (err) {
-              console.warn(`[SWITE] Error resolving ${args.path}:`, err);
+              log.warn(`Error resolving ${args.path}:`, err);
             }
           }
 
@@ -786,14 +786,14 @@ export class SwiteBuilder {
     // Log bundle stats (metafile paths can be relative to absWorkingDir)
     if (result.metafile) {
       const outputs = Object.keys(result.metafile.outputs);
-      console.log(chalk.green(`\n  Generated ${outputs.length} file(s):`));
+      log.info(`Generated ${outputs.length} file(s):`);
       for (const output of outputs) {
         const resolvedPath = path.isAbsolute(output)
           ? output
           : path.join(absWorkingDir, output);
         const stats = await fs.stat(resolvedPath);
         const size = this.formatBytes(stats.size);
-        console.log(chalk.gray(`    ${path.basename(output)}: ${size}`));
+        log.info(`  ${path.basename(output)}: ${size}`);
       }
     }
   }
@@ -808,7 +808,7 @@ export class SwiteBuilder {
       return;
     }
 
-    console.log(chalk.blue("📁 Copying public assets..."));
+    log.info("Copying public assets");
     await this.copyDir(publicPath, this.config.outDir);
   }
 

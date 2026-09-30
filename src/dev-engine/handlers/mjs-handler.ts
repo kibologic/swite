@@ -6,7 +6,6 @@
 
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
-import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { rewriteCssImports } from "./css-imports.js";
 import {
@@ -15,6 +14,11 @@ import {
   type HandlerContext,
 } from "./base-handler.js";
 import { JSHandler } from "./js-handler.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+import { markSource } from "../request-context.js";
+import { fileNotFoundError } from "../../internal/fs-errors.js";
+
+const log = getLogger("mjs");
 
 export class MJSHandler extends BaseHandler {
   private jsHandler: JSHandler;
@@ -35,17 +39,10 @@ export class MJSHandler extends BaseHandler {
       const jsPath = filePath.replace(/\.mjs$/, ".js");
       try {
         await fs.access(jsPath);
-        console.log(
-          chalk.yellow(
-            `[.mjs→.js] ${url} → ${url.replace(/\.mjs$/, ".js")} (file: ${jsPath})`,
-          ),
-        );
+        log.debug(`${url} -> ${url.replace(/\.mjs$/, ".js")} (file: ${relPath(jsPath)})`);
         return await this.jsHandler.handle(url.replace(/\.mjs$/, ".js"), res);
       } catch {
-        console.error(
-          chalk.red(`[.mjs] File not found: ${url} (tried .mjs, .js)`),
-        );
-        throw new Error(`File not found: ${url} (tried .mjs, .js)`);
+        throw fileNotFoundError(`File not found: ${url} (tried .mjs, .js)`);
       }
     }
 
@@ -60,6 +57,7 @@ export class MJSHandler extends BaseHandler {
 
     // Set proper MIME type for ES modules (.mjs)
     // According to MDN Web Standards: .mjs files should use "application/javascript"
+    markSource("compiled", res);
     setDevHeaders(res);
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.send(rewritten);

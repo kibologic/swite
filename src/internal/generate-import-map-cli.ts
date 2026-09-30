@@ -10,6 +10,9 @@ import { generateImportMap, saveImportMap } from "./generate-import-map.js";
 import { findWorkspaceRoot } from "../kernel/workspace.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("import-map");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,8 +23,8 @@ async function main() {
   const appRoot = process.cwd();
   const workspaceRoot = await findWorkspaceRoot(appRoot);
 
-  console.log(`[ImportMap] App root: ${appRoot}`);
-  console.log(`[ImportMap] Workspace root: ${workspaceRoot || "none"}`);
+  log.debug(`App root: ${appRoot}`);
+  log.debug(`Workspace root: ${workspaceRoot || "none"}`);
 
   // Generate import map
   const importMap = await generateImportMap(appRoot, workspaceRoot);
@@ -30,11 +33,11 @@ async function main() {
   const outputPath = path.join(appRoot, ".swite", "import-map.json");
   await saveImportMap(importMap, outputPath);
 
-  console.log(`[ImportMap] ✅ Import map generated successfully`);
+  log.debug(`Import map generated successfully`);
   process.exit(0);
 }
 
 main().catch((error) => {
-  console.error("[ImportMap] Error:", error);
+  log.error("Error:", error);
   process.exit(1);
 });

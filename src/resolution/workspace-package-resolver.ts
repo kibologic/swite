@@ -6,6 +6,9 @@
 import path from "node:path";
 import { findSwissLibMonorepo } from "../kernel/package-finder.js";
 import { getPackageRegistry } from "../kernel/package-registry.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("resolve");
 
 export interface WorkspacePackageResolverContext {
   root: string;
@@ -72,7 +75,7 @@ export async function resolveWorkspacePackage(
     try {
       await registry.scanWorkspace(primaryRoot, additionalRoots);
     } catch (error: any) {
-      console.error(`[SWITE] Error scanning package registry:`, error.message);
+      log.error(`Error scanning package registry:`, error.message);
     }
   }
 
@@ -88,6 +91,6 @@ export async function resolveWorkspacePackage(
     return packageInfo.path;
   }
 
-  console.log(`[SWITE] Package ${pkgName} not found in workspace (scanned ${registry.getPackageCount()} packages)`);
+  log.debug(`Package ${pkgName} not found in workspace (scanned ${registry.getPackageCount()} packages)`);
   return null;
 }

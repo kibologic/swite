@@ -6,7 +6,6 @@
 
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
-import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { inlineEnvReferences } from "../../config/env.js";
 import { compilationCache } from "../../internal/cache/compilation-cache.js";
@@ -16,6 +15,10 @@ import {
   setDevHeaders,
   type HandlerContext,
 } from "./base-handler.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+import { markSource } from "../request-context.js";
+
+const log = getLogger("ts");
 
 export class TSHandler extends BaseHandler {
   constructor(context: HandlerContext) {
@@ -24,7 +27,7 @@ export class TSHandler extends BaseHandler {
 
   async handle(url: string, res: Response): Promise<void> {
     const filePath = await this.resolveFilePath(url);
-    console.log(chalk.gray(`[.ts] ${url}`));
+    log.debug(`${url}`);
 
     // Check if .ts file exists, if not try .ui, .uix
     try {
@@ -47,11 +50,7 @@ export class TSHandler extends BaseHandler {
         try {
           const altPath = basePath + alt.ext;
           await fs.access(altPath);
-          console.log(
-            chalk.yellow(
-              `[.ts→${alt.ext}] ${url} → ${alt.url} (file: ${altPath})`,
-            ),
-          );
+          log.debug(`${url} -> ${alt.url} (file: ${relPath(altPath)})`);
           // Import and use the appropriate handler
           if (alt.ext === ".ui") {
             const { UIHandler } = await import("./ui-handler.js");
@@ -64,18 +63,12 @@ export class TSHandler extends BaseHandler {
           }
         } catch {
           // Try next alternative
-          console.log(
-            chalk.gray(
-              `[.ts→${alt.ext}] ${basePath + alt.ext} not found, trying next...`,
-            ),
-          );
+          log.debug(`${url}: no ${alt.ext} alternative`);
         }
       }
 
       // No alternatives found, throw error
-      console.error(
-        chalk.red(`[.ts] File not found: ${filePath} (and no alternatives found)`),
-      );
+      res.locals["switeNote"] = "file not found";
       res.status(404).send(`File not found: ${url}`);
       return;
     }
@@ -86,6 +79,7 @@ export class TSHandler extends BaseHandler {
       (compiled) => this.getDependencies(compiled),
     );
     if (cached) {
+      markSource("cache", res);
       setDevHeaders(res);
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
       res.send(cached);
@@ -127,21 +121,18 @@ export class TSHandler extends BaseHandler {
     const bareImportPattern =
       /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/;
     if (bareImportPattern.test(rewritten)) {
-      console.log(
-        chalk.red(
-          `[.ts] ERROR: Bare imports still present after rewriting: ${url}`,
-        ),
-      );
+      log.warn(`bare imports still present in ${url} after rewriting`);
       const matches = Array.from(
         rewritten.matchAll(
           /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g,
         ),
       );
       for (const match of matches.slice(0, 3)) {
-        console.log(chalk.red(`[.ts] Unresolved import: ${match[1]}`));
+        log.warn(`unresolved import in ${url}: ${match[1]}`);
       }
     }
 
+    markSource("compiled", res);
     setDevHeaders(res);
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.send(rewritten);

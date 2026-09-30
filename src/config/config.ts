@@ -9,6 +9,8 @@ export interface PythonServiceConfig {
   healthCheck: string;
   /** Additional environment variables passed to the Python process */
   env?: Record<string, string>;
+  /** Milliseconds proxyToPython waits for this service. Defaults to 10000. */
+  timeoutMs?: number;
 }
 
 export interface ServicesConfig {

@@ -24,3 +24,23 @@ export {
   startPythonDevService,
   stopPythonDevService,
 } from "./dev-engine/pythonDevManager.js";
+export {
+  SwiteProxyUnreachableError,
+  SwiteProxyTimeoutError,
+} from "./adapters/proxy/SwiteProxyError.js";
+export { sendProxyError, describeProxyFailure } from "./adapters/proxy/gateway.js";
+export type { GatewayErrorBody, GatewayFailure } from "./adapters/proxy/gateway.js";
+export type { SwiteServerInfo, FrameworkSource } from "./dev-engine/server-info.js";
+export { SwitePortInUseError, SwiteListenError } from "./dev-engine/listen-errors.js";
+export {
+  installProcessErrorHandlers,
+  installGracefulShutdown,
+} from "./dev-engine/lifecycle.js";
+export type { StopSummary } from "./dev-engine/lifecycle.js";
+export {
+  configureLogger,
+  configureLoggerFromProcess,
+  getLogger,
+  logger,
+} from "./internal/logger.js";
+export type { LogLevel, LogSink, Logger } from "./internal/logger.js";

@@ -7,7 +7,6 @@
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
 import { UiCompiler } from "@swissjs/compiler";
-import chalk from "chalk";
 import { ModuleResolver } from "../../resolution/resolver.js";
 import { resolveFilePath } from "../../resolution/path/file-path-resolver.js";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
@@ -15,6 +14,10 @@ import { inlineEnvReferences } from "../../config/env.js";
 import { compilationCache } from "../../internal/cache/compilation-cache.js";
 import { rewriteCssImports } from "./css-imports.js";
 import type { SwiteUserConfig } from "../../config/config.js";
+import { getLogger, isDebug } from "../../internal/logger.js";
+import { markSource } from "../request-context.js";
+
+const log = getLogger("compile");
 
 export interface HandlerContext {
   resolver: ModuleResolver;
@@ -58,6 +61,7 @@ export class BaseHandler {
     // Cache hit
     const cached = await compilationCache.get(filePath, (c) => this.getDependencies(c));
     if (cached) {
+      markSource("cache", res);
       setDevHeaders(res);
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
       res.setHeader("Content-Length", Buffer.byteLength(cached, "utf-8"));
@@ -90,12 +94,12 @@ export class BaseHandler {
     const beforeCss = compiled;
     compiled = rewriteCssImports(compiled);
     if (beforeCss !== compiled) {
-      const _debug = process.env["SWITE_DEBUG"] === "1";
-      if (_debug) console.log(chalk.blue(`[${label}] Handled CSS imports from ${url}`));
+      const _debug = isDebug();
+      if (_debug) log.debug(`Handled CSS imports from ${url}`);
     }
 
     if (BARE_IMPORT_RE.test(compiled)) {
-      console.warn(`[${label}] Compiled output contains bare imports: ${url}`);
+      log.debug(`compiled output of ${url} has bare imports (rewritten next)`);
     }
 
     const finalCode = await rewriteImports(compiled, filePath, this.context.resolver);
@@ -103,12 +107,13 @@ export class BaseHandler {
     await compilationCache.set(filePath, compiled, finalCode, (c) => this.getDependencies(c));
 
     if (BARE_IMPORT_RE.test(finalCode)) {
-      console.error(`[${label}] Bare imports still present after rewriting: ${url}`);
+      log.error(`bare imports still present in ${url} after rewriting`);
       for (const m of Array.from(finalCode.matchAll(/(?:import|from|export).*['"](@[^'"]+\/[^'"]+)(?!\/)[^'"]*['"]/g)).slice(0, 3)) {
-        console.error(`[${label}] Unresolved import: ${m[1]}`);
+        log.error(`unresolved import in ${url}: ${m[1]}`);
       }
     }
 
+    markSource("compiled", res);
     setDevHeaders(res);
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.setHeader("Content-Length", Buffer.byteLength(finalCode, "utf-8"));

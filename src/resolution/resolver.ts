@@ -4,12 +4,14 @@
 
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import chalk from "chalk";
 import type { ImportMap } from "../internal/generate-import-map.js";
 import { findWorkspaceRoot } from "../kernel/workspace.js";
 import { toUrl, type UrlResolverContext, type WorkspacePackageResolverContext } from "./url-resolver.js";
 import { resolveWorkspacePackage } from "./workspace-package-resolver.js";
 import { resolveBareImport, type BareImportResolverContext } from "./bare-import-resolver.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("resolve");
 
 export class ModuleResolver {
   private workspaceRoot: string | null = null;
@@ -23,10 +25,8 @@ export class ModuleResolver {
   setImportMap(importMap: ImportMap | null): void {
     this.importMap = importMap;
     if (importMap) {
-      console.log(
-        chalk.green(
-          `[Resolver] Loaded import map with ${Object.keys(importMap).length - 2} entries`,
-        ),
+      log.debug(
+        `Loaded import map with ${Object.keys(importMap).length - 2} entries`,
       );
     }
   }
@@ -42,8 +42,8 @@ export class ModuleResolver {
     if (this.importMap && !specifier.startsWith(".") && !specifier.startsWith("/")) {
       const mapped = this.importMap.imports[specifier];
       if (mapped) {
-        console.log(
-          chalk.green(`[Resolver] ✅ Import map hit: ${specifier} -> ${mapped}`),
+        log.debug(
+          `Import map hit: ${specifier} -> ${mapped}`,
         );
         return mapped;
       }
@@ -58,8 +58,8 @@ export class ModuleResolver {
       // Variable references: def.componentUrl, someVar, obj.prop, etc.
       if (specifier.includes(".") && !specifier.startsWith("@")) {
         // Property access pattern (def.componentUrl) - this is a variable, not a module
-        console.warn(
-          `[SWITE] resolve: Skipping variable reference: ${specifier}`,
+        log.debug(
+          `skipping variable reference: ${specifier}`,
         );
         return specifier; // Return as-is, don't try to resolve
       }
@@ -72,8 +72,8 @@ export class ModuleResolver {
           specifier,
         )
       ) {
-        console.warn(
-          `[SWITE] resolve: Invalid module specifier (likely variable): ${specifier}`,
+        log.debug(
+          `invalid module specifier (likely a variable): ${specifier}`,
         );
         return specifier; // Return as-is
       }
