@@ -7,6 +7,9 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { findSwissLibMonorepo } from "../kernel/package-finder.js";
 import { lookupInSymlinkRegistry } from "./symlink-registry.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("resolve");
 
 export interface UrlResolverContext {
   root: string;
@@ -52,8 +55,8 @@ export async function toUrl(
     }
 
     if (registryUrl) {
-      console.log(
-        `[SWITE] toUrl: symlink registry hit: ${filePath} → ${registryUrl}`
+      log.debug(
+        `toUrl: symlink registry hit: ${filePath} -> ${registryUrl}`
       );
       return registryUrl;
     }
@@ -65,7 +68,7 @@ export async function toUrl(
       const nodeModulesIndex = normalized.toLowerCase().indexOf("/node_modules/");
       const afterNodeModules = normalized.slice(nodeModulesIndex + "/node_modules/".length);
       const url = "/node_modules/" + afterNodeModules;
-      console.log(`[SWITE] toUrl: abs→node_modules URL: ${filePath} → ${url}`);
+      log.debug(`toUrl: abs->node_modules URL: ${filePath} -> ${url}`);
       return normalizeResult(url);
     }
 
@@ -114,12 +117,12 @@ export async function toUrl(
           const srcRelative = srcUrl.replace("/swiss-packages/", "");
           const srcFilePath = path.join(monorepo, srcRelative);
           if (await context.fileExists(srcFilePath)) {
-            console.log(`[SWITE] toUrl: abs→swiss-packages URL (src): ${filePath} → ${srcUrl}`);
+            log.debug(`toUrl: abs->swiss-packages URL (src): ${filePath} -> ${srcUrl}`);
             return normalizeResult(srcUrl);
           }
         }
 
-        console.log(`[SWITE] toUrl: abs→swiss-packages URL: ${filePath} → ${url}`);
+        log.debug(`toUrl: abs->swiss-packages URL: ${filePath} -> ${url}`);
         return normalizeResult(url);
       }
     }
@@ -146,7 +149,7 @@ export async function toUrl(
           }
         }
 
-        console.log(`[SWITE] toUrl: abs→workspace URL: ${filePath} → ${url}`);
+        log.debug(`toUrl: abs->workspace URL: ${filePath} -> ${url}`);
         return normalizeResult(url);
       }
     }
@@ -154,7 +157,7 @@ export async function toUrl(
     if (normalizedLower.startsWith(appRoot.toLowerCase() + "/") || normalizedLower === appRoot.toLowerCase()) {
       const relative = normalized.slice(appRoot.length);
       const url = relative.startsWith("/") ? relative : "/" + relative;
-      console.log(`[SWITE] toUrl: abs→approot URL: ${filePath} → ${url}`);
+      log.debug(`toUrl: abs->approot URL: ${filePath} -> ${url}`);
       return normalizeResult(url);
     }
   }

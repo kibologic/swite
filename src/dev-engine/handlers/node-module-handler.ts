@@ -7,7 +7,6 @@
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
-import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { BaseHandler, type HandlerContext } from "./base-handler.js";
 import { UIHandler } from "./ui-handler.js";
@@ -16,6 +15,11 @@ import { TSHandler } from "./ts-handler.js";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
 import { findPackage } from "../../kernel/package-finder.js";
 import { shouldUseCdnFallback } from "../../resolution/cdn/cdn-fallback.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+import { classifyFsError, type FsFailureKind } from "../../internal/fs-errors.js";
+import { markSource } from "../request-context.js";
+
+const log = getLogger("node_modules");
 
 export class NodeModuleHandler extends BaseHandler {
   private uiHandler: UIHandler;
@@ -45,11 +49,9 @@ export class NodeModuleHandler extends BaseHandler {
         this.context.workspaceRoot ||
         (await findWorkspaceRoot(this.context.root));
 
-      console.log(chalk.blue(`[node_modules] Processing: ${url}`));
-      console.log(chalk.blue(`[node_modules] App root: ${this.context.root}`));
-      console.log(
-        chalk.blue(`[node_modules] Workspace root: ${workspaceRoot || "none"}`),
-      );
+      markSource("node_modules", res);
+      let probed = 0;
+      const probeFailures: FsFailureKind[] = [];
 
       // Walk up directory tree from app root to find node_modules at any level
       // (handles pnpm isolated AND hoisted workspace layouts)
@@ -60,16 +62,16 @@ export class NodeModuleHandler extends BaseHandler {
           const candidate = path.join(current, urlPath);
           if (!visited.has(candidate)) {
             visited.add(candidate);
-            console.log(chalk.blue(`[node_modules] Trying path: ${candidate}`));
+            probed++;
             try {
               const resolvedPath = await fs.realpath(candidate);
-              console.log(chalk.blue(`[node_modules] Resolved to: ${resolvedPath}`));
               await fs.access(resolvedPath);
               filePath = resolvedPath;
-              console.log(chalk.green(`[node_modules] ✓ Found: ${urlPath}`));
               break;
             } catch (err) {
-              console.log(chalk.yellow(`[node_modules] Path failed: ${err instanceof Error ? err.message : String(err)}`));
+              // Expected with pnpm layouts: the file lives in only one of the
+              // parent node_modules directories. Recorded, not printed.
+              probeFailures.push(classifyFsError(err));
             }
           }
           const parent = path.dirname(current);
@@ -88,14 +90,14 @@ export class NodeModuleHandler extends BaseHandler {
 
         if (location) {
           filePath = path.join(location.path, remainingPath);
-          console.log(chalk.green(`[node_modules] ✓ Found ${packageName} via ${location.type}: ${filePath}`));
+          log.debug(`${packageName} found via ${location.type}`);
 
           // Re-use dist -> src fallback for local siblings
           if (location.type !== 'node_modules' && filePath.includes("/dist/")) {
             const srcPath = filePath.replace("/dist/", "/src/").replace(/\.[mc]?js$/, ".ts");
             try {
               await fs.access(srcPath);
-              console.log(chalk.yellow(`[node_modules] Intercept: Serving local source instead of dist: ${srcPath}`));
+              log.debug(`serving local source instead of dist: ${relPath(srcPath)}`);
               filePath = srcPath;
 
               if (srcPath.endsWith(".ts")) {
@@ -110,8 +112,11 @@ export class NodeModuleHandler extends BaseHandler {
         filePath = path.join(this.context.root, urlPath);
       }
 
-      console.log(
-        chalk.gray(`[node_modules] Resolving: ${url} -> ${filePath}`),
+      // One summarised line replaces the per-probe chatter.
+      log.debug(
+        `${url} -> ${relPath(filePath)} (probed ${probed}${
+          probeFailures.length ? `, misses: ${summariseFailures(probeFailures)}` : ""
+        })`,
       );
 
       // File path is already resolved from above, no need to resolve again
@@ -120,11 +125,7 @@ export class NodeModuleHandler extends BaseHandler {
       try {
         await fs.access(filePath);
       } catch (error) {
-        console.log(
-          chalk.yellow(
-            `[node_modules] File not found at ${filePath}, trying case-insensitive match...`,
-          ),
-        );
+        log.debug(`no exact-case file for ${url}, trying case-insensitive match`);
         // File doesn't exist with exact case, try case-insensitive match (for Reflect.js vs reflect.js)
         if (url.endsWith(".js")) {
           const dir = path.dirname(filePath);
@@ -140,11 +141,7 @@ export class NodeModuleHandler extends BaseHandler {
             );
             if (caseInsensitiveMatch) {
               filePath = path.join(resolvedDir, caseInsensitiveMatch);
-              console.log(
-                chalk.yellow(
-                  `[node_modules] Case-insensitive match: ${requestedName} -> ${caseInsensitiveMatch}`,
-                ),
-              );
+              log.debug(`case-insensitive match: ${requestedName} -> ${caseInsensitiveMatch}`);
               // Verify the file exists with the correct case
               await fs.access(filePath);
               // File found, continue to serve it below
@@ -153,11 +150,7 @@ export class NodeModuleHandler extends BaseHandler {
             }
           } catch {
             // Directory doesn't exist or no case-insensitive match, try alternatives
-            console.log(
-              chalk.gray(
-                `[node_modules] Case-insensitive match failed for ${url}, trying alternatives...`,
-              ),
-            );
+            log.debug(`no case-insensitive match for ${url}, trying .ts/.ui/.uix`);
             const basePath = filePath.slice(0, -3); // Remove .js
             const alternatives = [
               {
@@ -180,10 +173,8 @@ export class NodeModuleHandler extends BaseHandler {
             for (const alt of alternatives) {
               try {
                 await fs.access(basePath + alt.ext);
-                console.log(
-                  chalk.yellow(
-                    `[.js→${alt.ext}] ${url} → ${url.replace(/\.js$/, alt.ext)}`,
-                  ),
+                log.debug(
+                  `${url} -> ${url.replace(/\.js$/, alt.ext)}`,
                 );
                 return await alt.handler();
               } catch {
@@ -192,23 +183,12 @@ export class NodeModuleHandler extends BaseHandler {
             }
 
             // No alternatives found - redirect to CDN instead of 500
-            const cdnRedirect = this.getNodeModuleCdnRedirect(url);
-            if (cdnRedirect) {
-              console.log(chalk.yellow(`[node_modules] Not found locally, redirecting to CDN: ${cdnRedirect}`));
-              res.redirect(302, cdnRedirect);
-              return;
-            }
-            res.status(404).send(`Module not found: ${url}`);
+            this.notFound(url, res);
             return;
           }
         } else {
           // Not a .js file and doesn't exist - try CDN redirect or 404
-          const cdnRedirect = this.getNodeModuleCdnRedirect(url);
-          if (cdnRedirect) {
-            res.redirect(302, cdnRedirect);
-            return;
-          }
-          res.status(404).send(`Module not found: ${url}`);
+          this.notFound(url, res);
           return;
         }
       }
@@ -217,49 +197,25 @@ export class NodeModuleHandler extends BaseHandler {
       // For node_modules files, skip import rewriting - they should work as-is
       // and rewriting can cause issues with package internals
       try {
-        console.log(chalk.blue(`[node_modules] Reading file: ${filePath}`));
         const source = await fs.readFile(filePath, "utf-8");
-        console.log(
-          chalk.green(
-            `[node_modules] ✓ File read successfully, length: ${source.length}`,
-          ),
-        );
 
         // Skip import rewriting for node_modules - serve as-is
         // This is safer and faster for third-party packages
         res.setHeader("Content-Type", "application/javascript; charset=utf-8");
         res.send(source);
-        console.log(chalk.green(`[node_modules] ✓ Served ${url} successfully`));
       } catch (error) {
-        console.error(
-          chalk.red(`[node_modules] Error processing ${url} at ${filePath}:`),
-        );
-        console.error(chalk.red(`[node_modules] Error details:`), error);
-        if (error instanceof Error) {
-          console.error(chalk.red(`[node_modules] Error stack:`), error.stack);
-        }
+        log.debug(`read failed for ${url} at ${relPath(filePath)}`, error);
         throw error;
       }
     } catch (outerError) {
-      console.error(chalk.red(`[node_modules] FATAL ERROR handling ${url}:`));
-      console.error(
-        chalk.red(
-          `[node_modules] Error type: ${outerError instanceof Error ? outerError.constructor.name : typeof outerError}`,
-        ),
-      );
-      console.error(
-        chalk.red(
-          `[node_modules] Error message: ${outerError instanceof Error ? outerError.message : String(outerError)}`,
-        ),
-      );
-      if (outerError instanceof Error && outerError.stack) {
-        console.error(chalk.red(`[node_modules] Stack trace:`));
-        console.error(outerError.stack);
-      }
+      // Detail (with stack) at debug; the request log line carries the reason.
+      log.debug(`cannot serve ${url}`, outerError);
+      const cause = outerError instanceof Error ? outerError.message : String(outerError);
+      res.locals["switeNote"] = `cannot serve locally: ${cause.split("\n", 1)[0]}`;
       // Try CDN redirect before giving up with 500
       const cdnRedirect = this.getNodeModuleCdnRedirect(url);
       if (cdnRedirect) {
-        console.log(chalk.yellow(`[node_modules] Error handling locally, redirecting to CDN: ${cdnRedirect}`));
+        markSource("cdn-redirect", res);
         res.redirect(302, cdnRedirect);
         return;
       }
@@ -267,6 +223,19 @@ export class NodeModuleHandler extends BaseHandler {
         `Module not found: ${url}. ${outerError instanceof Error ? outerError.message : String(outerError)}`,
       );
     }
+  }
+
+  /** Not found locally: redirect to the CDN when allowed, otherwise 404. */
+  private notFound(url: string, res: Response): void {
+    const cdnRedirect = this.getNodeModuleCdnRedirect(url);
+    if (cdnRedirect) {
+      markSource("cdn-redirect", res);
+      res.locals["switeNote"] = "not found locally, redirected to CDN";
+      res.redirect(302, cdnRedirect);
+      return;
+    }
+    res.locals["switeNote"] = "module not found";
+    res.status(404).send(`Module not found: ${url}`);
   }
 
   /**
@@ -301,7 +270,7 @@ export class NodeModuleHandler extends BaseHandler {
     const internalScopes = this.context.userConfig?.internalScopes || [];
     const isInternal = internalScopes.some(scope => pkgName === scope || pkgName.startsWith(scope + "/"));
     if (isInternal) {
-      console.log(chalk.red(`[node_modules] CDN Blocked: Internal scope package ${pkgName} cannot be served from jsDelivr.`));
+      log.warn(`internal-scope package ${pkgName} is not installed locally and must not be served from the CDN`);
       return null;
     }
 
@@ -309,4 +278,11 @@ export class NodeModuleHandler extends BaseHandler {
     // jsDelivr +esm serves ESM build; works for reflect-metadata and most npm packages
     return `https://cdn.jsdelivr.net/npm/${pkgName}/+esm`;
   }
+}
+
+/** Summarise probe failures by cause, e.g. "3 missing, 1 permission". */
+function summariseFailures(failures: FsFailureKind[]): string {
+  const counts = new Map<FsFailureKind, number>();
+  for (const f of failures) counts.set(f, (counts.get(f) ?? 0) + 1);
+  return [...counts].map(([kind, n]) => `${n} ${kind}`).join(", ");
 }

@@ -7,6 +7,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { findMonorepoPackageDir } from "./monorepo-package-registry.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("packages");
 
 /**
  * Dynamically find package directories by searching up the file tree
@@ -122,7 +125,7 @@ export async function findPackage(
           const siblingPath = path.join(parent, repo);
           const packagePath = path.join(siblingPath, "packages", unscoped);
           if (await fileExists(path.join(packagePath, "package.json"))) {
-            console.log(`[package-finder] Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
+            log.debug(`Dev Intercept: Serving ${packageName} from local source: ${packagePath}`);
             return { path: packagePath, type: 'swiss-lib' };
           }
         }

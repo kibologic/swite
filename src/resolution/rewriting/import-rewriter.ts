@@ -19,8 +19,10 @@ import { init, parse } from "es-module-lexer";
 import { ModuleResolver } from "../resolver.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
 import { shouldUseCdnFallback } from "../cdn/cdn-fallback.js";
+import { getLogger } from "../../internal/logger.js";
+
+const log = getLogger("rewrite");
 
 interface Replacement {
   start: number;
@@ -70,7 +72,7 @@ export async function rewriteImports(
       if (specifier.startsWith(".") || specifier.startsWith("/")) continue;
 
       if (!/^[@a-zA-Z]/.test(specifier)) {
-        console.warn(`[SWITE] import-rewriter: Invalid specifier format: ${specifier}`);
+        log.warn(`Invalid specifier format: ${specifier}`);
         continue;
       }
 
@@ -79,13 +81,13 @@ export async function rewriteImports(
       try {
         resolved = await resolver.resolve(specifier, importer);
         if (!resolved || resolved === specifier || (!resolved.startsWith("/") && !resolved.startsWith("http"))) {
-          console.warn(chalk.yellow(`[SWITE] import-rewriter: Resolver returned invalid result for ${specifier}, using CDN fallback`));
+          log.warn(`Resolver returned invalid result for ${specifier}, using CDN fallback`);
           resolved = shouldUseCdnFallback(specifier)
             ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
             : `/node_modules/${specifier}`;
         }
       } catch (error) {
-        console.error(chalk.red(`[SWITE] import-rewriter: Error resolving ${specifier}:`), error);
+        log.error(`Error resolving ${specifier}:`, error);
         resolved = shouldUseCdnFallback(specifier)
           ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
           : `/node_modules/${specifier}`;
@@ -130,7 +132,7 @@ export async function rewriteImports(
 
     return result;
   } catch (error) {
-    console.error(chalk.red(`[SWITE] import-rewriter: Error rewriting imports in ${importer}:`), error);
+    log.error(`Error rewriting imports in ${importer}:`, error);
     return code;
   }
 }
@@ -181,7 +183,7 @@ function resolveQuotedSpan(
     };
   }
 
-  console.warn(`[SWITE] import-rewriter: Could not find quotes for specifier: ${rawSpecifier}`);
+  log.warn(`Could not find quotes for specifier: ${rawSpecifier}`);
   return { specifier: null, start: rawStart, end: rawEnd };
 }
 

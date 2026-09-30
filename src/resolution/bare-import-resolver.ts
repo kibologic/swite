@@ -5,12 +5,14 @@
 
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import chalk from "chalk";
 import { findSwissLibMonorepo } from "../kernel/package-finder.js";
 import { shouldUseCdnFallback } from "./cdn/cdn-fallback.js";
 import type { UrlResolverContext, WorkspacePackageResolverContext } from "./url-resolver.js";
 import { resolveWorkspacePackage } from "./workspace-package-resolver.js";
 import { toUrl } from "./url-resolver.js";
+import { getLogger, isDebug, relPath } from "../internal/logger.js";
+
+const log = getLogger("resolve");
 
 export interface BareImportResolverContext extends UrlResolverContext {
   resolveWorkspacePackage: (pkgName: string) => Promise<string | null>;
@@ -23,7 +25,7 @@ export async function resolveBareImport(
   specifier: string,
   context: BareImportResolverContext
 ): Promise<string> {
-  const debug = process.env["SWITE_DEBUG"] === "1";
+  const debug = isDebug();
 
   // Extract package name outside the try/catch so fallback logic can reference it.
   // This must stay project-agnostic: works for both scoped and unscoped packages.
@@ -58,7 +60,7 @@ export async function resolveBareImport(
     }
 
     if (debug) {
-      console.log(`[swite:resolve] Trying "${specifier}" in:`, nodeModulesLocations);
+      log.debug(`trying "${specifier}" in: ${nodeModulesLocations.map((p) => relPath(p)).join(", ")}`);
     }
 
     // Try each location
@@ -85,17 +87,18 @@ export async function resolveBareImport(
       }
 
       if (!shouldUseCdnFallback(pkgName)) {
-        console.warn(
-          `[SWITE] Cannot resolve "${pkgName}"\n` +
-          `  Searched:\n${nodeModulesLocations.map(p => `    - ${p}`).join('\n')}\n` +
-          `  CDN fallback is disabled. To enable for a scope, set:\n` +
-          `    SWITE_CDN_FALLBACK_SCOPES=@scope1,@scope2\n` +
-          `  Run with --verbose for full resolution trace.`,
+        // One line: the searched locations are available at debug level.
+        log.debug(
+          `"${pkgName}" searched: ${nodeModulesLocations.map((p) => relPath(p)).join(", ")}`,
+        );
+        log.warnOnce(
+          `unresolved:${pkgName}`,
+          `Cannot resolve "${pkgName}" (searched ${nodeModulesLocations.length} locations; CDN fallback is off for this scope, enable with SWITE_CDN_FALLBACK_SCOPES; --verbose lists the locations)`,
         );
         return `/node_modules/${specifier}`;
       }
 
-      console.warn(`[SWITE] Package ${pkgName} not found in any local location, using CDN fallback`);
+      log.warn(`Package ${pkgName} not found in any local location, using CDN fallback`);
       return `https://cdn.jsdelivr.net/npm/${specifier}/+esm`;
     }
 
@@ -194,10 +197,8 @@ export async function resolveBareImport(
           if (caseInsensitiveMatch) {
             const correctedPath = path.join(dir, caseInsensitiveMatch);
             if (await context.fileExists(correctedPath)) {
-              console.log(
-                chalk.yellow(
-                  `[SWITE] Case-insensitive match for ${pkgName}: ${fileName} -> ${caseInsensitiveMatch}`,
-                ),
+              log.debug(
+                `Case-insensitive match for ${pkgName}: ${fileName} -> ${caseInsensitiveMatch}`,
               );
               return await toUrl(correctedPath, context);
             }
@@ -241,12 +242,12 @@ export async function resolveBareImport(
     }
 
     // Fallback to CDN (jsDelivr; esm.sh returns 500 for some packages) when allowed.
-    console.warn(`[SWITE] Could not resolve ${specifier}, using fallback`);
+    log.warn(`Could not resolve ${specifier}, using fallback`);
     return shouldUseCdnFallback(pkgName)
       ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
       : `/node_modules/${specifier}`;
   } catch (error) {
-    console.warn(`[SWITE] Error resolving ${specifier}:`, error);
+    log.warn(`Error resolving ${specifier}:`, error);
     return shouldUseCdnFallback(pkgName)
       ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`
       : `/node_modules/${specifier}`;
@@ -403,15 +404,15 @@ async function resolveWorkspacePackageEntry(
   for (const ext of [".ts", ".ui", ".uix", ".js"]) {
     const srcIndex = path.join(srcDir, `index${ext}`);
     if (await context.fileExists(srcIndex)) {
-      console.log(
-        `[SWITE] Found unbuilt workspace package ${pkgName} at ${srcIndex}`,
+      log.debug(
+        `Found unbuilt workspace package ${pkgName} at ${srcIndex}`,
       );
       return await toUrl(srcIndex, context);
     }
   }
 
-  console.warn(
-    `[SWITE] Entry point not found for ${pkgName} at ${fullPath}, using fallback`,
+  log.warn(
+    `Entry point not found for ${pkgName} at ${fullPath}, using fallback`,
   );
   return shouldUseCdnFallback(pkgName)
     ? `https://cdn.jsdelivr.net/npm/${specifier}/+esm`

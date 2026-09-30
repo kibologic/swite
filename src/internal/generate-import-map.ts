@@ -8,9 +8,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { ModuleResolver } from "../resolution/resolver.js";
-import chalk from "chalk";
 import { getPackageRegistry } from "../kernel/package-registry.js";
 import { findSwissLibMonorepo } from "../kernel/package-finder.js";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("import-map");
 
 export interface ImportMap {
   version: string;
@@ -35,14 +37,14 @@ export async function generateImportMap(
     imports: {},
   };
 
-  console.log(chalk.blue("[ImportMap] Using dynamic package registry..."));
+  log.debug("Using dynamic package registry...");
 
   // Use dynamic package registry instead of manual scanning
   const registry = getPackageRegistry();
   const scanRoot = workspaceRoot || root;
   
   if (!scanRoot) {
-    console.warn(chalk.yellow("[ImportMap] No workspace root or app root provided, cannot scan packages"));
+    log.warn("No workspace root or app root provided, cannot scan packages");
     return importMap;
   }
   
@@ -54,7 +56,7 @@ export async function generateImportMap(
       const swissPackageJson = path.join(swissLib, "package.json");
       await fs.access(swissPackageJson);
       additionalRoots.push(swissLib);
-      console.log(chalk.blue("[ImportMap] Including swiss-lib monorepo..."));
+      log.debug("Including swiss-lib monorepo...");
     } catch {
       // swiss-lib monorepo not accessible, skip
     }
@@ -64,7 +66,7 @@ export async function generateImportMap(
   try {
     await registry.scanWorkspace(scanRoot, additionalRoots);
   } catch (error: any) {
-    console.error(chalk.red(`[ImportMap] Error scanning workspace: ${error.message}`));
+    log.error(`Error scanning workspace: ${error.message}`);
     return importMap;
   }
   
@@ -74,8 +76,8 @@ export async function generateImportMap(
     path: pkg.path,
   }));
 
-  console.log(
-    chalk.blue(`[ImportMap] Resolving ${packages.length} packages...`),
+  log.debug(
+    `Resolving ${packages.length} packages...`,
   );
 
   // Resolve each package
@@ -112,16 +114,14 @@ export async function generateImportMap(
         }
       }
     } catch (error) {
-      console.warn(
-        chalk.yellow(`[ImportMap] Failed to resolve ${pkg.name}:`, error),
+      log.warn(
+        `Failed to resolve ${pkg.name}:`, error,
       );
     }
   }
 
-  console.log(
-    chalk.green(
-      `[ImportMap] ✅ Generated import map with ${resolved} entries`,
-    ),
+  log.debug(
+    `Generated import map with ${resolved} entries`,
   );
 
   return importMap;
@@ -136,7 +136,7 @@ export async function saveImportMap(
 ): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, JSON.stringify(importMap, null, 2), "utf-8");
-  console.log(chalk.green(`[ImportMap] ✅ Saved to ${outputPath}`));
+  log.debug(`Saved to ${outputPath}`);
 }
 
 /**

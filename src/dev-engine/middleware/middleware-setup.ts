@@ -8,7 +8,6 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { RouteDefinition } from "@swissjs/core";
 import { RouteScanner } from "@swissjs/plugin-file-router/core";
 import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
-import chalk from "chalk";
 import path from "path";
 import fs from "fs/promises";
 import { ModuleResolver } from "../../resolution/resolver.js";
@@ -28,6 +27,10 @@ import { HMREngine } from "../hmr/hmr.js";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
 import { loadImportMap } from "../../internal/generate-import-map.js";
 import { loadEnv } from "../../config/env.js";
+import { getLogger } from "../../internal/logger.js";
+import { noteRequestError } from "../request-context.js";
+
+const log = getLogger("middleware");
 
 export interface MiddlewareConfig {
   root: string;
@@ -62,8 +65,8 @@ function sendSourceError(res: Response, error: unknown, fullPath: string): void 
   res.status(status).setHeader("Content-Type", "text/plain");
   if (IS_PRODUCTION) {
     // Never leak error.message or filesystem paths to the client in
-    // production — the full detail is already in the console.error() at
-    // each call site above. Mirrors the pattern the Python backend uses.
+    // production — the detail is in the request log note and, with
+    // --verbose, the debug log at each call site above. Mirrors the pattern the Python backend uses.
     res.send(status === 404 ? "Not found" : "Internal server error");
     return;
   }
@@ -105,8 +108,8 @@ export async function setupMiddleware(
 
   // ── Workspace + import-map setup ───────────────────────────────────────────
   const workspaceRoot = await findWorkspaceRoot(config.root);
-  console.log(chalk.blue(`[SWITE] App root: ${config.root}`));
-  console.log(chalk.blue(`[SWITE] Workspace root: ${workspaceRoot}`));
+  log.debug(`App root: ${config.root}`);
+  log.debug(`Workspace root: ${workspaceRoot}`);
 
   const { join } = await import("node:path");
   const importMapPath = join(config.root, ".swite", "import-map.json");
@@ -114,7 +117,7 @@ export async function setupMiddleware(
   if (importMap) {
     config.resolver.setImportMap(importMap);
   } else {
-    console.log(chalk.yellow(`[SWITE] No import map at ${importMapPath}, using runtime resolution`));
+    log.debug(`No import map at ${importMapPath}, using runtime resolution`);
   }
 
   // ── Load .env files for import.meta.env inlining ──────────────────────────
@@ -151,7 +154,7 @@ export async function setupMiddleware(
         if (res.headersSent) return;
       }
     } catch (error) {
-      console.error(chalk.red(`[/packages] Error ${fullUrl}:`), error);
+      noteRequestError(res, error, "/packages");
       if (!res.headersSent) {
         res
           .status(500)
@@ -182,7 +185,7 @@ export async function setupMiddleware(
         await uiHandler.handle(fullPath, res);
         if (!res.headersSent) res.status(500).send("Internal server error: handler did not send response");
       } catch (error) {
-        console.error(chalk.red(`[/src] .ui error ${fullPath}:`), error);
+        noteRequestError(res, error, ".ui");
         sendSourceError(res, error, fullPath);
       }
       return;
@@ -193,7 +196,7 @@ export async function setupMiddleware(
         await uixHandler.handle(fullPath, res);
         if (!res.headersSent) res.status(500).setHeader("Content-Type", "text/plain").send("Error loading module");
       } catch (error) {
-        console.error(chalk.red(`[/src] .uix error ${fullPath}:`), error);
+        noteRequestError(res, error, ".uix");
         sendSourceError(res, error, fullPath);
       }
       return;
@@ -204,7 +207,7 @@ export async function setupMiddleware(
         await tsHandler.handle(fullPath, res);
         if (!res.headersSent) res.status(500).setHeader("Content-Type", "text/plain").send("Error loading module");
       } catch (error) {
-        console.error(chalk.red(`[/src] .ts error ${fullPath}:`), error);
+        noteRequestError(res, error, ".ts");
         sendSourceError(res, error, fullPath);
       }
       return;
@@ -278,7 +281,7 @@ export async function setupMiddleware(
       // .ts/.js — fall through to general middleware
       return next();
     } catch (error) {
-      console.error(chalk.red(`[/lib] Error ${url}:`), error);
+      noteRequestError(res, error, "/lib");
       if (!res.headersSent) res.status(500).send("Internal server error");
     }
   });
@@ -346,8 +349,10 @@ export async function setupMiddleware(
       // Static assets — pass to static middleware
       next();
     } catch (error) {
-      console.error(chalk.red(`[middleware] Error ${url}:`), error);
-      if (!res.headersSent) {
+      noteRequestError(res, error, "middleware");
+      if (!res.headersSent && isFileNotFoundError(error)) {
+        sendSourceError(res, error, url);
+      } else if (!res.headersSent) {
         res.status(500).send(
           IS_PRODUCTION
             ? "Internal server error"

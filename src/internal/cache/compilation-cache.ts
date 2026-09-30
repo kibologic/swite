@@ -7,7 +7,9 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
+import { getLogger, relPath } from "../../internal/logger.js";
+
+const log = getLogger("cache");
 
 interface CacheEntry {
   compiled: string;
@@ -41,8 +43,8 @@ export class CompilationCache {
     try {
       const stats = await fs.stat(filePath);
       if (stats.mtimeMs !== entry.mtime) {
-        console.log(
-          chalk.yellow(`[Cache] Invalidating ${filePath}: file modified`),
+        log.debug(
+          `Invalidating ${relPath(filePath)}: file modified`,
         );
         this.cache.delete(filePath);
         return null;
@@ -61,10 +63,8 @@ export class CompilationCache {
       currentDeps.some((dep) => !prevSet.has(dep));
 
     if (depsChanged) {
-      console.log(
-        chalk.yellow(
-          `[Cache] Invalidating ${filePath}: dependencies changed`,
-        ),
+      log.debug(
+        `Invalidating ${relPath(filePath)}: dependencies changed`,
       );
       this.cache.delete(filePath);
       return null;
@@ -76,27 +76,23 @@ export class CompilationCache {
         const depStats = await fs.stat(dep);
         // If dependency was modified after cache entry, invalidate
         if (depStats.mtimeMs > entry.timestamp) {
-          console.log(
-            chalk.yellow(
-              `[Cache] Invalidating ${filePath}: dependency ${dep} modified`,
-            ),
+          log.debug(
+            `Invalidating ${relPath(filePath)}: dependency ${dep} modified`,
           );
           this.cache.delete(filePath);
           return null;
         }
       } catch {
         // Dependency deleted or inaccessible
-        console.log(
-          chalk.yellow(
-            `[Cache] Invalidating ${filePath}: dependency ${dep} not found`,
-          ),
+        log.debug(
+          `Invalidating ${relPath(filePath)}: dependency ${dep} not found`,
         );
         this.cache.delete(filePath);
         return null;
       }
     }
 
-    console.log(chalk.green(`[Cache] ✅ Cache hit for ${filePath}`));
+    log.debug(`Cache hit for ${relPath(filePath)}`);
     return entry.rewritten;
   }
 
@@ -117,7 +113,7 @@ export class CompilationCache {
       const firstKey = this.cache.keys().next().value;
       if (firstKey) {
         this.cache.delete(firstKey);
-        console.log(chalk.gray(`[Cache] Evicted ${firstKey} (cache full)`));
+        log.debug(`Evicted ${relPath(firstKey)} (cache full)`);
       }
     }
 
@@ -133,13 +129,11 @@ export class CompilationCache {
         timestamp: Date.now(),
       });
 
-      console.log(
-        chalk.green(
-          `[Cache] ✅ Cached ${filePath} (${dependencies.length} deps)`,
-        ),
+      log.debug(
+        `Cached ${relPath(filePath)} (${dependencies.length} deps)`,
       );
     } catch (error) {
-      console.warn(chalk.yellow(`[Cache] Failed to cache ${filePath}:`, error));
+      log.warn(`Failed to cache ${relPath(filePath)}:`, error);
     }
   }
 
@@ -155,7 +149,7 @@ export class CompilationCache {
    */
   clearAll(): void {
     this.cache.clear();
-    console.log(chalk.gray("[Cache] Cleared all entries"));
+    log.debug("Cleared all entries");
   }
 
   /**

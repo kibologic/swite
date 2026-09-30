@@ -14,6 +14,9 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("resolve");
 
 // realpath (normalized, forward slashes) → browser URL prefix
 const registry = new Map<string, string>();
@@ -25,8 +28,8 @@ export async function buildSymlinkRegistry(
   for (const dir of nodeModulesDirs) {
     await scanNodeModulesDir(dir);
   }
-  console.log(
-    `[SWITE] Symlink registry built: ${registry.size} entries from ${nodeModulesDirs.length} node_modules dirs`
+  log.debug(
+    `Symlink registry built: ${registry.size} entries from ${nodeModulesDirs.length} node_modules dirs`
   );
 }
 
@@ -84,7 +87,7 @@ async function registerSymlink(
     const key = realPath.replace(/\\/g, "/");
     const value = `/node_modules/${pkgName}`;
     registry.set(key, value);
-    console.log(`[SWITE] Registry: ${pkgName}: ${key} → ${value}`);
+    log.debug(`Registry: ${pkgName}: ${key} -> ${value}`);
   } catch {
     // broken symlink — ignore
   }

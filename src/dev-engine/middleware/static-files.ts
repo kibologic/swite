@@ -8,8 +8,12 @@ import express from "express";
 import type { Express } from "express";
 import { promises as fs, realpathSync, existsSync } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
 import { findWorkspaceRoot } from "../../kernel/workspace.js";
+import { getLogger, isDebug } from "../../internal/logger.js";
+import { getSwiteVersion } from "../../internal/version.js";
+import { markSource } from "../request-context.js";
+
+const log = getLogger("static");
 
 export interface StaticFilesConfig {
   root: string;
@@ -26,8 +30,8 @@ export async function setupStaticFiles(
   app: Express,
   config: StaticFilesConfig,
 ): Promise<void> {
-  const _debug = process.env["SWITE_DEBUG"] === "1";
-  if (_debug) console.log(chalk.magenta(`[static-files] ⚡ setupStaticFiles called with root: ${config.root}`));
+  const _debug = isDebug();
+  if (_debug) log.debug(`setupStaticFiles called with root: ${config.root}`);
   
   // Static file serving - ONLY serve public directory
   // Do NOT serve dist/ folder - it contains old build artifacts with bare imports
@@ -88,6 +92,7 @@ export async function setupStaticFiles(
     ) {
       return next();
     }
+    markSource("node_modules", res);
     nodeModulesStatic(req, res, next);
   });
 
@@ -137,6 +142,7 @@ export async function setupStaticFiles(
           const pkgReal = realpathSync(pkgSymLink);
           const realAbs = path.join(pkgReal, subPath);
           if (existsSync(realAbs)) {
+            markSource("node_modules", res);
             res.sendFile(realAbs);
             return;
           }
@@ -147,10 +153,8 @@ export async function setupStaticFiles(
         next();
       });
       if (_debug) {
-        console.log(
-          chalk.gray(
-            `  📦 Serving workspace node_modules from ${workspaceNodeModules}`,
-          ),
+        log.debug(
+          `  Serving workspace node_modules from ${workspaceNodeModules}`,
         );
       }
     } catch {
@@ -165,13 +169,13 @@ export async function setupStaticFiles(
     workspaceRootForNodeModules || (await findWorkspaceRoot(config.root));
   
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] Workspace root: ${workspaceRoot}`),
+    log.debug(
+      `Workspace root: ${workspaceRoot}`,
     );
   }
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] App root: ${config.root}`),
+    log.debug(
+      `App root: ${config.root}`,
     );
   }
   
@@ -179,8 +183,8 @@ export async function setupStaticFiles(
   let libPath: string | null = null;
   
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] Determining lib/ path... workspaceRoot: ${workspaceRoot}, config.root: ${config.root}`),
+    log.debug(
+      `Determining lib/ path... workspaceRoot: ${workspaceRoot}, config.root: ${config.root}`,
     );
   }
   
@@ -188,58 +192,58 @@ export async function setupStaticFiles(
   if (workspaceRoot && workspaceRoot !== config.root) {
     libPath = path.join(workspaceRoot, "lib");
     if (_debug) {
-      console.log(
-        chalk.blue(`[static-files] Trying workspace root lib/: ${libPath}`),
+      log.debug(
+        `Trying workspace root lib/: ${libPath}`,
       );
     }
   } else {
     if (_debug) {
-      console.log(
-        chalk.yellow(`[static-files] Workspace root equals app root, trying parent directories...`),
+      log.debug(
+        `Workspace root equals app root, trying parent directories...`,
       );
     }
     // If workspace root equals app root, try going up from app root
     const parentDir = path.dirname(config.root);
     const parentLibPath = path.join(parentDir, "lib");
     if (_debug) {
-      console.log(
-        chalk.blue(`[static-files] Trying parent lib/: ${parentLibPath}`),
+      log.debug(
+        `Trying parent lib/: ${parentLibPath}`,
       );
     }
     try {
       await fs.access(parentLibPath);
       libPath = parentLibPath;
       if (_debug) {
-        console.log(
-          chalk.blue(`[static-files] Using parent directory lib/: ${libPath}`),
+        log.debug(
+          `Using parent directory lib/: ${libPath}`,
         );
       }
     } catch (error) {
       if (_debug) {
-        console.log(
-          chalk.yellow(`[static-files] Parent lib/ not found: ${error instanceof Error ? error.message : String(error)}`),
+        log.debug(
+          `Parent lib/ not found: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       // Parent lib/ doesn't exist, try grandparent
       const grandparentDir = path.dirname(parentDir);
       const grandparentLibPath = path.join(grandparentDir, "lib");
       if (_debug) {
-        console.log(
-          chalk.blue(`[static-files] Trying grandparent lib/: ${grandparentLibPath}`),
+        log.debug(
+          `Trying grandparent lib/: ${grandparentLibPath}`,
         );
       }
       try {
         await fs.access(grandparentLibPath);
         libPath = grandparentLibPath;
         if (_debug) {
-          console.log(
-            chalk.blue(`[static-files] Using grandparent directory lib/: ${libPath}`),
+          log.debug(
+            `Using grandparent directory lib/: ${libPath}`,
           );
         }
       } catch (error2) {
         if (_debug) {
-          console.log(
-            chalk.yellow(`[static-files] Grandparent lib/ not found: ${error2 instanceof Error ? error2.message : String(error2)}`),
+          log.debug(
+            `Grandparent lib/ not found: ${error2 instanceof Error ? error2.message : String(error2)}`,
           );
         }
       }
@@ -248,8 +252,8 @@ export async function setupStaticFiles(
   
   // Serve lib/ directory if found
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] Checking for lib/ directory... libPath: ${libPath}`),
+    log.debug(
+      `Checking for lib/ directory... libPath: ${libPath}`,
     );
   }
   
@@ -267,13 +271,13 @@ export async function setupStaticFiles(
   }
   
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] Final lib path to check: ${finalLibPath}`),
+    log.debug(
+      `Final lib path to check: ${finalLibPath}`,
     );
   }
   if (_debug) {
-    console.log(
-      chalk.blue(`[static-files] workspaceRoot: ${workspaceRoot}, config.root: ${config.root}`),
+    log.debug(
+      `workspaceRoot: ${workspaceRoot}, config.root: ${config.root}`,
     );
   }
   
@@ -283,8 +287,8 @@ export async function setupStaticFiles(
     await fs.access(finalLibPath);
     libPathExists = true;
     if (_debug) {
-      console.log(
-        chalk.green(`[static-files] ✅ Found lib/ directory at: ${finalLibPath}`),
+      log.debug(
+        `Found lib/ directory at: ${finalLibPath}`,
       );
     }
     
@@ -293,31 +297,31 @@ export async function setupStaticFiles(
     try {
       await fs.access(testCssPath);
       if (_debug) {
-        console.log(
-          chalk.green(`[static-files] ✅ Test CSS file exists: ${testCssPath}`),
+        log.debug(
+          `Test CSS file exists: ${testCssPath}`,
         );
       }
     } catch (error) {
       if (_debug) {
-        console.error(
-          chalk.yellow(`[static-files] ⚠️  Test CSS file NOT found: ${testCssPath}`),
+        log.debug(
+          `Test CSS file NOT found: ${testCssPath}`,
         );
       }
     }
   } catch (error) {
     if (_debug) {
-      console.error(
-        chalk.red(`[static-files] ❌ lib/ directory not found at: ${finalLibPath}`),
+      log.debug(
+        `lib/ directory not found at: ${finalLibPath}`,
       );
     }
     if (_debug) {
-      console.error(
-        chalk.red(`[static-files] Error: ${error instanceof Error ? error.message : String(error)}`),
+      log.debug(
+        `Error: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     if (_debug) {
-      console.error(
-        chalk.red(`[static-files] ⚠️  /lib middleware will NOT be registered - CSS files will 404!`),
+      log.debug(
+        `/lib middleware will NOT be registered - CSS files will 404!`,
       );
     }
   }
@@ -325,7 +329,7 @@ export async function setupStaticFiles(
   // Register static file middleware ONLY if directory exists
   if (libPathExists) {
     if (_debug) {
-      console.log(chalk.green(`[static-files] ✅ Registering /lib middleware with finalLibPath: ${finalLibPath}`));
+      log.debug(`Registering /lib middleware with finalLibPath: ${finalLibPath}`);
     }
     
     // CRITICAL: First middleware to block source files BEFORE any express.static can serve them
@@ -344,18 +348,16 @@ export async function setupStaticFiles(
       
       if (isSourceFile) {
         if (_debug) {
-          console.log(
-            chalk.red(
-              `[static-files] ⚠️  FIRST BLOCK: Skipping source file: url=${url}, path=${path} - should be handled by module middleware`
-            )
+          log.debug(
+            `FIRST BLOCK: Skipping source file: url=${url}, path=${path} - should be handled by module middleware`
           );
         }
         return next(); // Let module transformation middleware handle it
       }
       
       if (_debug) {
-        console.log(
-          chalk.cyan(`[static-files] Request for /lib${path} (static file)`),
+        log.debug(
+          `Request for /lib${path} (static file)`,
         );
       }
       next();
@@ -374,7 +376,7 @@ export async function setupStaticFiles(
           res.setHeader("Expires", "0");
         } catch (error) {
           if (_debug) {
-            console.error(chalk.red(`[static-files] Error setting headers for ${filePath}:`), error);
+            log.error(`Error setting headers for ${filePath}:`, error);
           }
         }
       },
@@ -396,10 +398,8 @@ export async function setupStaticFiles(
       
       if (isSourceFile) {
         if (_debug) {
-          console.log(
-            chalk.red(
-              `[static-files /lib express.static] ⚠️  BLOCKING source file: url=${url}, path=${path} - should be handled by module transformation middleware`
-            )
+          log.debug(
+            `[static-files /lib express.static] BLOCKING source file: url=${url}, path=${path} - should be handled by module transformation middleware`
           );
         }
         // CRITICAL: Don't call libStatic - return next() to skip it
@@ -413,8 +413,8 @@ export async function setupStaticFiles(
     // Only static files (CSS, images) should be served, and they're handled by the custom handler above
     // If a file isn't found, let it 404 rather than serving with wrong MIME type
     if (_debug) {
-      console.log(
-        chalk.gray(`  📦 Serving workspace lib/ from ${finalLibPath}`),
+      log.debug(
+        `  Serving workspace lib/ from ${finalLibPath}`,
       );
     }
   }
@@ -428,8 +428,8 @@ export async function setupStaticFiles(
       await fs.access(librariesPath);
       app.use("/libraries", express.static(librariesPath));
       if (_debug) {
-        console.log(
-          chalk.gray(`  📦 Serving workspace libraries/ from ${librariesPath}`),
+        log.debug(
+          `  Serving workspace libraries/ from ${librariesPath}`,
         );
       }
     } catch {
@@ -462,8 +462,8 @@ export async function setupStaticFiles(
         express.static(modulesPath)(req, res, next);
       });
       if (_debug) {
-        console.log(
-          chalk.gray(`  📦 Serving workspace modules/ from ${modulesPath}`),
+        log.debug(
+          `  Serving workspace modules/ from ${modulesPath}`,
         );
       }
     } catch {
@@ -484,9 +484,9 @@ export async function setupSPAFallback(
   app: Express,
   config: StaticFilesConfig,
 ): Promise<void> {
-  const _debug = process.env["SWITE_DEBUG"] === "1";
+  const _debug = isDebug();
   if (_debug) {
-    console.log(chalk.magenta(`[SWITE] setupSPAFallback loaded - VERSION 0.3.5 (NO HARDCODED CSS)`));
+    log.debug(`setupSPAFallback loaded (swite ${getSwiteVersion()})`);
   }
   // Use app.all() to catch ALL HTTP methods, but only for non-source files
   app.all("*", async (req, res, next) => {
@@ -620,16 +620,16 @@ export async function setupSPAFallback(
     // CRITICAL: This MUST run before import map injection
     // IMPORTANT: Only inject CSS files that actually exist in the app's directory
     if (_debug) {
-      console.log(chalk.magenta(`[SWITE CSS] ========== CSS EXTRACTION START (VERSION 0.3.5) ==========`));
+      log.debug(`css extraction start (swite ${getSwiteVersion()})`);
     }
     if (_debug) {
-      console.log(chalk.magenta(`[SWITE CSS] App root: ${config.root}`));
+      log.debug(`App root: ${config.root}`);
     }
     try {
       const entryFile = config.entry ?? "src/index.ui";
       const entryPointPath = path.join(config.root, entryFile);
       if (_debug) {
-        console.log(chalk.blue(`[SWITE CSS] Checking entry point: ${entryPointPath}`));
+        log.debug(`Checking entry point: ${entryPointPath}`);
       }
       const entryPointContent = await fs.readFile(entryPointPath, "utf-8");
       
@@ -698,12 +698,12 @@ export async function setupSPAFallback(
       }
       
       if (_debug) {
-        console.log(chalk.blue(`[SWITE CSS] Found ${cssImports.size} CSS import(s) in code`));
+        log.debug(`Found ${cssImports.size} CSS import(s) in code`);
       }
       if (cssImports.size > 0) {
         const cssArray = Array.from(cssImports);
         if (_debug) {
-          console.log(chalk.blue(`[SWITE CSS] CSS imports found: ${cssArray.join(", ")}`));
+          log.debug(`CSS imports found: ${cssArray.join(", ")}`);
         }
         
         // Verify CSS files exist before injecting them
@@ -716,30 +716,30 @@ export async function setupSPAFallback(
             : path.join(config.root, "src", cssPath);
           
           if (_debug) {
-            console.log(chalk.blue(`[SWITE CSS] Checking if CSS file exists: ${filePath} (url: ${url})`));
+            log.debug(`Checking if CSS file exists: ${filePath} (url: ${url})`);
           }
           try {
             await fs.access(filePath);
             if (_debug) {
-              console.log(chalk.green(`[SWITE CSS] ✅ CSS file exists: ${filePath}`));
+              log.debug(`CSS file exists: ${filePath}`);
             }
             existingCssFiles.push(url);
           } catch {
             // CSS file doesn't exist, skip it
             // This allows different apps/websites to have different CSS files
             if (_debug) {
-              console.log(chalk.yellow(`[SWITE CSS] ⚠️  CSS file NOT found: ${filePath}, skipping`));
+              log.debug(`CSS file NOT found: ${filePath}, skipping`);
             }
           }
         }
         
         // Only inject CSS files that actually exist
         if (_debug) {
-          console.log(chalk.blue(`[SWITE CSS] ${existingCssFiles.length} CSS file(s) exist out of ${cssArray.length} found`));
+          log.debug(`${existingCssFiles.length} CSS file(s) exist out of ${cssArray.length} found`);
         }
         if (existingCssFiles.length === 0) {
           if (_debug) {
-            console.log(chalk.yellow(`[SWITE CSS] ⚠️  No CSS files exist, skipping injection`));
+            log.debug(`No CSS files exist, skipping injection`);
           }
         } else if (existingCssFiles.length > 0) {
           const cssLinks = existingCssFiles
@@ -757,16 +757,16 @@ export async function setupSPAFallback(
             html = html.replace(/\s*<\/head>/i, `${cssLinks}\n  </head>`);
             if (html === beforeReplace) {
               if (_debug) {
-                console.warn(chalk.yellow("[SWITE] Failed to inject CSS links - </head> not found"));
+                log.warn("Failed to inject CSS links - </head> not found");
               }
             } else {
               if (_debug) {
-                console.log(chalk.green(`[SWITE] ✅ Injected ${existingCssFiles.length} CSS link(s): ${existingCssFiles.join(", ")}`));
+                log.debug(`Injected ${existingCssFiles.length} CSS link(s): ${existingCssFiles.join(", ")}`);
               }
             }
           } else {
             if (_debug) {
-              console.log(chalk.blue(`[SWITE CSS] CSS links already in HTML, skipping injection`));
+              log.debug(`CSS links already in HTML, skipping injection`);
             }
           }
         }
@@ -775,7 +775,7 @@ export async function setupSPAFallback(
       // If entry point doesn't exist or can't be read, continue without CSS injection
       // Silently continue - CSS injection is optional
       if (_debug) {
-        console.log(chalk.yellow(`[SWITE CSS] Could not extract CSS imports: ${error instanceof Error ? error.message : String(error)}`));
+        log.debug(`Could not extract CSS imports: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -801,17 +801,17 @@ export async function setupSPAFallback(
       html = html.replace(/\s*<\/head>/i, `${importMap}\n  </head>`);
       if (html === beforeReplace) {
         if (_debug) {
-          console.warn("[SWITE] Failed to add import map - </head> not found or already replaced");
+          log.warn("Failed to add import map - </head> not found or already replaced");
         }
       } else {
         if (_debug) {
-          console.log(`[SWITE] Added import map with ${Object.keys(switeImports).length} entries`);
+          log.debug(`Added import map with ${Object.keys(switeImports).length} entries`);
         }
       }
     } else {
       // Importmap already in HTML — merge swite entries without overwriting existing ones
       if (_debug) {
-        console.log("[SWITE] Import map already exists in HTML — merging swite entries");
+        log.debug("Import map already exists in HTML — merging swite entries");
       }
       if (Object.keys(switeImports).length > 0) {
         html = html.replace(
@@ -831,6 +831,7 @@ export async function setupSPAFallback(
       }
     }
 
+    markSource("spa", res);
     res.send(html);
   });
 }

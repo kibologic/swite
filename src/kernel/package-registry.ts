@@ -6,7 +6,9 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
+import { getLogger } from "../internal/logger.js";
+
+const log = getLogger("packages");
 
 export interface PackageInfo {
   name: string;
@@ -32,24 +34,24 @@ export class PackageRegistry {
 
     // Validate workspace root exists
     if (!workspaceRoot) {
-      console.warn(chalk.yellow("[PackageRegistry] No workspace root provided, skipping scan"));
+      log.warn("No workspace root provided, skipping scan");
       return;
     }
 
     try {
       const rootStat = await fs.stat(workspaceRoot);
       if (!rootStat.isDirectory()) {
-        console.warn(chalk.yellow(`[PackageRegistry] Workspace root is not a directory: ${workspaceRoot}`));
+        log.warn(`Workspace root is not a directory: ${workspaceRoot}`);
         return;
       }
     } catch (error: any) {
-      console.warn(chalk.yellow(`[PackageRegistry] Cannot access workspace root ${workspaceRoot}:`, error.message));
+      log.warn(`Cannot access workspace root ${workspaceRoot}:`, error.message);
       return;
     }
 
     this.scanRoots = [workspaceRoot, ...additionalRoots.filter(root => root && root !== workspaceRoot)];
-    console.log(chalk.blue(`[PackageRegistry] Scanning workspace for packages...`));
-    console.log(chalk.gray(`[PackageRegistry] Roots: ${this.scanRoots.join(", ")}`));
+    log.debug(`Scanning workspace for packages...`);
+    log.debug(`Roots: ${this.scanRoots.join(", ")}`);
 
     for (const root of this.scanRoots) {
       if (root) {
@@ -58,10 +60,8 @@ export class PackageRegistry {
     }
 
     this.scanned = true;
-    console.log(
-      chalk.green(
-        `[PackageRegistry] ✅ Found ${this.packages.size} packages`
-      )
+    log.debug(
+      `Found ${this.packages.size} packages`
     );
   }
 
@@ -82,7 +82,7 @@ export class PackageRegistry {
       if (error.code === "ENOENT" || error.code === "EACCES") {
         return;
       }
-      console.warn(chalk.yellow(`[PackageRegistry] Cannot access ${dir}:`, error.message));
+      log.warn(`Cannot access ${dir}:`, error.message);
       return;
     }
 
@@ -119,17 +119,13 @@ export class PackageRegistry {
               // Store package - if duplicate name, prefer the one found first (or closest to workspace root)
               if (!this.packages.has(packageJson.name)) {
                 this.packages.set(packageJson.name, packageInfo);
-                console.log(
-                  chalk.gray(
-                    `[PackageRegistry] Found: ${packageJson.name} at ${packagePath}`
-                  )
+                log.debug(
+                  `Found: ${packageJson.name} at ${packagePath}`
                 );
               } else {
                 // Log duplicate but don't overwrite (first found wins)
-                console.log(
-                  chalk.yellow(
-                    `[PackageRegistry] Duplicate package ${packageJson.name} found at ${packagePath}, keeping first`
-                  )
+                log.debug(
+                  `Duplicate package ${packageJson.name} found at ${packagePath}, keeping first`
                 );
               }
             }
@@ -146,7 +142,7 @@ export class PackageRegistry {
     } catch (error: any) {
       // Directory read error, log but don't fail
       if (error.code !== "ENOENT" && error.code !== "EACCES") {
-        console.warn(chalk.yellow(`[PackageRegistry] Error reading directory ${dir}:`, error.message));
+        log.warn(`Error reading directory ${dir}:`, error.message);
       }
     }
   }

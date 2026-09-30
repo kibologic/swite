@@ -6,7 +6,6 @@
 
 import type { Response } from "express";
 import { promises as fs } from "node:fs";
-import chalk from "chalk";
 import { rewriteImports } from "../../resolution/rewriting/import-rewriter.js";
 import { rewriteCssImports } from "./css-imports.js";
 import {
@@ -17,6 +16,11 @@ import {
 import { UIHandler } from "./ui-handler.js";
 import { UIXHandler } from "./uix-handler.js";
 import { TSHandler } from "./ts-handler.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+import { markSource } from "../request-context.js";
+import { fileNotFoundError } from "../../internal/fs-errors.js";
+
+const log = getLogger("js");
 
 export class JSHandler extends BaseHandler {
   private uiHandler: UIHandler;
@@ -61,29 +65,16 @@ export class JSHandler extends BaseHandler {
         try {
           const altPath = basePath + alt.ext;
           await fs.access(altPath);
-          console.log(
-            chalk.yellow(
-              `[.js→${alt.ext}] ${url} → ${url.replace(/\.js$/, alt.ext)} (file: ${altPath})`,
-            ),
-          );
+          log.debug(`${url} -> ${url.replace(/\.js$/, alt.ext)} (file: ${relPath(altPath)})`);
           return await alt.handler();
         } catch {
           // Try next alternative
-          console.log(
-            chalk.gray(
-              `[.js→${alt.ext}] ${basePath + alt.ext} not found, trying next...`,
-            ),
-          );
+          log.debug(`${url}: no ${alt.ext} alternative`);
         }
       }
 
-      // No alternatives found, throw error
-      console.error(
-        chalk.red(`[.js] File not found: ${url} (tried .js, .ts, .ui, .uix)`),
-      );
-      console.error(chalk.red(`[.js] filePath was: ${filePath}`));
-      console.error(chalk.red(`[.js] basePath was: ${basePath}`));
-      throw new Error(`File not found: ${url} (tried .js, .ts, .ui, .uix)`);
+      // No alternatives found: the caller answers 404 (ENOENT) and logs it once.
+      throw fileNotFoundError(`File not found: ${url} (tried .js, .ts, .ui, .uix)`);
     }
 
     // .js file exists, process it normally
@@ -95,13 +86,13 @@ export class JSHandler extends BaseHandler {
     const simpleNpmPattern =
       /(?:import|from|export).*['"]([a-zA-Z][a-zA-Z0-9_-]*)[^'"]*['"]/;
     if (bareImportPattern.test(source) || simpleNpmPattern.test(source)) {
-      console.log(chalk.yellow(`[.js] Found imports in ${url}, rewriting...`));
+      log.debug(`Found imports in ${url}, rewriting...`);
       // Log the actual imports found
       const importMatches = source.matchAll(
         /(?:import|from)\s+['"]([^'"]+)['"]/g,
       );
       for (const match of importMatches) {
-        console.log(chalk.cyan(`[.js] Found import: ${match[1]}`));
+        log.debug(`Found import: ${match[1]}`);
       }
     }
 
@@ -114,21 +105,18 @@ export class JSHandler extends BaseHandler {
 
     // Debug: Verify no bare imports remain after rewriting
     if (bareImportPattern.test(rewritten)) {
-      console.error(
-        chalk.red(
-          `[.js] WARNING: Bare imports still present in ${url} after rewriting!`,
-        ),
-      );
+      log.warn(`bare imports still present in ${url} after rewriting`);
       const matches = Array.from(
         rewritten.matchAll(
           /(?:import|from|export).*['"](@[^'"]+\/[^'"]+)[^'"]*['"]/g,
         ),
       );
       for (const match of matches.slice(0, 3)) {
-        console.error(chalk.red(`[.js] Unresolved: ${match[1]}`));
+        log.warn(`unresolved import in ${url}: ${match[1]}`);
       }
     }
 
+    markSource("compiled", res);
     setDevHeaders(res);
     res.setHeader("Content-Type", "application/javascript; charset=utf-8");
     res.send(rewritten);

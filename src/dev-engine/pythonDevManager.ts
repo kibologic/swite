@@ -1,14 +1,21 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolve } from "node:path";
-import chalk from "chalk";
 import { initPythonProxy } from "../adapters/proxy/proxyToPython.js";
 import type { PythonServiceConfig } from "../config/config.js";
+import { getLogger, logger } from "../internal/logger.js";
+
+const log = getLogger("python");
 
 const POLL_INTERVAL_MS = 500;
 const HEALTH_TIMEOUT_MS = 30_000;
 const BACKOFF_THRESHOLD = 5;
 
 let _child: ChildProcess | null = null;
+/** True while we are the ones stopping the child, so its exit is not reported as a crash. */
+let _stopping = false;
+/** The last few output lines of the child, shown once if it exits with an error. */
+const RECENT_LIMIT = 10;
+const _recent: string[] = [];
 
 /**
  * Spawn the Python service and wait until its health endpoint responds 200.
@@ -23,8 +30,8 @@ export async function startPythonDevService(
   const healthUrl = `http://localhost:${config.port}${config.healthCheck}`;
   const pythonCmd = process.platform === "win32" ? "python" : "python3";
 
-  console.log(
-    chalk.blue(`[python] spawning: ${pythonCmd} ${config.entry} (port ${config.port})`),
+  log.debug(
+    `spawning: ${pythonCmd} ${config.entry} (port ${config.port})`,
   );
 
   const env: NodeJS.ProcessEnv = {
@@ -38,15 +45,17 @@ export async function startPythonDevService(
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  pipeLines(_child.stdout, chalk.cyan("[python] "));
-  pipeLines(_child.stderr, chalk.yellow("[python] "));
+  _stopping = false;
+  _recent.length = 0;
+  pipeLines(_child.stdout, "[python] ");
+  pipeLines(_child.stderr, "[python] ");
 
   _child.on("exit", (code) => {
-    if (code !== null && code !== 0) {
-      console.error(
-        chalk.red(
-          `\n[python] process exited with code ${code} — Node server continuing in degraded mode\n`,
-        ),
+    if (code !== null && code !== 0 && !_stopping) {
+      // Reported once, with the child's last output, instead of a bare code.
+      const tail = _recent.length ? `\n  last output:\n    ${_recent.join("\n    ")}` : "";
+      log.error(
+        `Python service exited with code ${code}; Node server continuing in degraded mode${tail}`,
       );
     }
     _child = null;
@@ -56,7 +65,7 @@ export async function startPythonDevService(
 
   await pollHealth(healthUrl);
 
-  console.log(chalk.green(`[python] healthy — ${healthUrl}`));
+  log.info(`Python service healthy at ${healthUrl}`);
 }
 
 /**
@@ -64,7 +73,8 @@ export async function startPythonDevService(
  */
 export function stopPythonDevService(): void {
   if (_child) {
-    console.log(chalk.gray("[python] shutting down..."));
+    log.debug("stopping Python service");
+    _stopping = true;
     _child.kill("SIGTERM");
     _child = null;
   }
@@ -83,7 +93,10 @@ function pipeLines(
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.trim()) process.stdout.write(prefix + line + "\n");
+      if (!line.trim()) continue;
+      _recent.push(line);
+      if (_recent.length > RECENT_LIMIT) _recent.shift();
+      logger.out("info", prefix + line);
     }
   });
 }
@@ -111,6 +124,6 @@ async function pollHealth(url: string): Promise<void> {
 
   stopPythonDevService();
   throw new Error(
-    `[python] health check timed out after ${HEALTH_TIMEOUT_MS}ms — is ${url} reachable?`,
+    `Python health check timed out after ${HEALTH_TIMEOUT_MS}ms: is ${url} reachable?`,
   );
 }

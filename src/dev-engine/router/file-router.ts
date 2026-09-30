@@ -6,11 +6,13 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chalk from "chalk";
 import type { RouteDefinition } from "@swissjs/core";
 import { RouteScanner } from "@swissjs/plugin-file-router/core";
 import { createFileWatcher } from "@swissjs/plugin-file-router/dev";
 import { HMREngine } from "../hmr/hmr.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+
+const log = getLogger("router");
 
 export interface FileRouterConfig {
   root: string;
@@ -54,7 +56,7 @@ export async function setupFileRouter(
     try {
       await fs.access(appPagesDir);
       routesToScan.push(appPagesDir);
-      console.log(chalk.gray(`  Scanning app routes from ${appPagesDir}`));
+      log.debug(`Scanning app routes from ${relPath(appPagesDir)}`);
     } catch {
       // pages directory doesn't exist, skip
     }
@@ -64,14 +66,12 @@ export async function setupFileRouter(
       try {
         const scannedRoutes = await result.routeScanner.scanRoutes(pagesDir);
         result.routes.push(...scannedRoutes);
-        console.log(
-          chalk.green(
-            `  ✓ Found ${scannedRoutes.length} routes in ${pagesDir}`,
-          ),
+        log.debug(
+          `Found ${scannedRoutes.length} routes in ${relPath(pagesDir)}`,
         );
       } catch (error) {
-        console.warn(
-          chalk.yellow(`  ⚠ Failed to scan routes from ${pagesDir}:`),
+        log.warn(
+          `Failed to scan routes from ${relPath(pagesDir)}:`,
           error,
         );
       }
@@ -86,7 +86,7 @@ export async function setupFileRouter(
       });
 
       result.routeWatcher.on("change", async (filePath) => {
-        console.log(chalk.yellow(`  🔄 Route file changed: ${filePath}`));
+        log.debug(`Route file changed: ${relPath(filePath)}`);
         // Rescan routes
         result.routes = [];
         for (const pagesDir of routesToScan) {
@@ -95,25 +95,23 @@ export async function setupFileRouter(
               await result.routeScanner!.scanRoutes(pagesDir);
             result.routes.push(...scannedRoutes);
           } catch (error) {
-            console.warn(`Failed to rescan routes:`, error);
+            log.warn(`Failed to rescan routes:`, error);
           }
         }
         // Notify HMR about route changes
         config.hmr.notifyChange(filePath);
       });
 
-      console.log(
-        chalk.green(
-          `  ✓ File router initialized with ${result.routes.length} routes`,
-        ),
+      log.debug(
+        `File router initialized with ${result.routes.length} routes`,
       );
     } else {
-      console.log(
-        chalk.gray(`  ⚠ No pages directories found, file router disabled`),
+      log.debug(
+        `No pages directories found, file router disabled`,
       );
     }
   } catch (error) {
-    console.warn(chalk.yellow(`  ⚠ File router setup failed:`), error);
+    log.warn(`File router setup failed:`, error);
     // Continue without file router
   }
 

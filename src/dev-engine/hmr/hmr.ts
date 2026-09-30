@@ -5,8 +5,10 @@
 import * as chokidar from "chokidar";
 import { WebSocketServer, WebSocket } from "ws";
 import * as net from "net";
-import chalk from "chalk";
 import { buildHmrClientScript } from "./hmr-client-template.js";
+import { getLogger, relPath } from "../../internal/logger.js";
+
+const log = getLogger("hmr");
 
 export class HMREngine {
   private wss!: WebSocketServer;
@@ -53,16 +55,16 @@ export class HMREngine {
     // Check if port is available, if not find a free one
     const isAvailable = await this.checkPortAvailable(this.port);
     if (!isAvailable) {
-      console.warn(
-        chalk.yellow(`[HMR] Port ${this.port} is in use, finding free port...`),
+      log.warn(
+        `HMR port ${this.port} is in use; using a free port instead (the HTTP port is unaffected)`,
       );
       this.port = await this.findFreePort();
     }
 
     this.wss = new WebSocketServer({ port: this.port });
     this.setupWebSocket();
-    console.log(
-      chalk.green(`[HMR] WebSocket server started on port ${this.port}`),
+    log.debug(
+      `WebSocket server started on port ${this.port}`,
     );
   }
 
@@ -88,21 +90,19 @@ export class HMREngine {
     this.wss.on("connection", (ws, req) => {
       const origin = req.headers["origin"];
       if (!this.isOriginAllowed(origin)) {
-        console.warn(
-          chalk.red(
-            `[HMR] Rejected connection from disallowed origin: ${origin ?? "(none)"}`,
-          ),
+        log.warn(
+          `Rejected connection from disallowed origin: ${origin ?? "(none)"}`,
         );
         ws.close(1008, "Origin not allowed");
         return;
       }
 
       this.clients.add(ws);
-      console.log(chalk.green("[HMR] Client connected"));
+      log.debug("Client connected");
 
       ws.on("close", () => {
         this.clients.delete(ws);
-        console.log(chalk.gray("[HMR] Client disconnected"));
+        log.debug("Client disconnected");
       });
     });
   }
@@ -144,7 +144,7 @@ export class HMREngine {
     });
 
     this.watcher.on("change", (filePath) => {
-      console.log(chalk.yellow(`[HMR] ${filePath} changed`));
+      log.debug(`${relPath(filePath)} changed`);
 
       // Determine file type and update type
       const fileExt = filePath.split(".").pop()?.toLowerCase();
@@ -159,18 +159,18 @@ export class HMREngine {
     });
 
     this.watcher.on("add", (filePath) => {
-      console.log(chalk.yellow(`[HMR] File added: ${filePath}`));
+      log.debug(`file added: ${relPath(filePath)}`);
       // New file — dependents are unknown, trigger a full reload
       this.broadcast({ type: "reload", path: filePath, reason: "file-added" });
     });
 
     this.watcher.on("unlink", (filePath) => {
-      console.log(chalk.yellow(`[HMR] File deleted: ${filePath}`));
+      log.debug(`file deleted: ${relPath(filePath)}`);
       // Deleted file — its dependents will 404 on next import, trigger reload
       this.broadcast({ type: "reload", path: filePath, reason: "file-deleted" });
     });
 
-    console.log(chalk.green("[HMR] Watching for file changes..."));
+    log.debug("Watching for file changes...");
   }
 
   notifyChange(filePath: string): void {
@@ -227,8 +227,15 @@ export class HMREngine {
     });
   }
 
-  async stop() {
+  /** Close the file watcher, every client socket and the WebSocket server. */
+  async stop(): Promise<void> {
     await this.watcher?.close();
-    this.wss.close();
+    this.watcher = undefined;
+    for (const client of this.clients) client.terminate();
+    this.clients.clear();
+    const wss = this.wss as WebSocketServer | undefined;
+    if (wss) {
+      await new Promise<void>((resolve) => wss.close(() => resolve()));
+    }
   }
 }
